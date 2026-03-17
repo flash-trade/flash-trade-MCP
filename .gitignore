@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+builds/
+
+# Environment & secrets (NEVER commit)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.secret
+
+# Solana keypairs (NEVER commit)
+id.json
+*.keypair.json
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Lock files (bun.lock IS committed — it's the dependency lock)
+# Do NOT add bun.lock here
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Runtime / test artifacts
+coverage/
+.nyc_output/
+*.pid
+*.seed
+
+# CLI user config (generated at runtime in ~/.config/flash/)
+# Not in this repo, but just in case
+settings.json
+history.jsonl
+keys/

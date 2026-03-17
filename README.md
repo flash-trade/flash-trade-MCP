@@ -248,3 +248,4 @@ See [CLAUDE.md](./CLAUDE.md) for architecture details and coding patterns.
 ## License
 
 MIT
+# flash-trade-CLI

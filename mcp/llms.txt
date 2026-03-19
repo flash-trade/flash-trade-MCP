@@ -1,0 +1,83 @@
+# Flash Trade MCP Server
+
+> MCP server for Flash Trade perpetual DEX on Solana. Provides AI agents with tools to read market data, preview trades, and build unsigned transactions for perpetual futures positions.
+
+## Key Information
+
+- Non-custodial: all transaction tools return unsigned base64 transactions for user signing
+- Prices from Pyth Lazer oracles (mainnet only — devnet returns stale/zero)
+- SOL positions use JitoSOL as underlying collateral on-chain
+- Available markets: SOL, BTC, ETH, and others in Flash Trade pools
+
+## Critical Rules
+
+- COLLATERAL MINIMUM: Limit orders, take-profit (TP), and stop-loss (SL) require >$10 collateral AFTER entry fees. A $10 position has fees deducted, dropping collateral below $10 and preventing TP/SL/limit orders. Use at least $11-12 input amount.
+- ALWAYS show the preview (entry price, fees, leverage, liquidation price) to the user before they sign any transaction.
+- Position key (on-chain pubkey from get_positions) is required to close, add/remove collateral, or reverse a position.
+- Default slippage is 0.5%. Increase for volatile markets or large positions.
+- Degen mode must be explicitly enabled for leverage above normal limits.
+
+## Order Types
+
+- Market: executes immediately at oracle price + slippage. Any collateral amount.
+- Limit: executes when price hits target. Requires >$10 collateral after fees.
+- Take-Profit (TP): trigger order that closes position at profit target. Requires >$10 collateral after fees.
+- Stop-Loss (SL): trigger order that closes position to limit loss. Requires >$10 collateral after fees.
+- Up to 5 trigger orders (TP/SL) per position, each can close a different percentage.
+
+## Read Tools
+
+- [health_check]: Verify API connectivity
+- [get_markets]: List all perpetual futures markets
+- [get_market]: Get market details by pubkey
+- [get_pools]: List liquidity pools
+- [get_pool]: Get pool details by pubkey
+- [get_custodies]: List custody accounts (token holdings per pool)
+- [get_custody]: Get custody details by pubkey
+- [get_prices]: Get current oracle prices for all assets
+- [get_price]: Get price for one symbol (e.g. "SOL", "BTC")
+- [get_positions]: List positions, optionally filtered by wallet owner (enriched with PnL)
+- [get_position]: Get single position by pubkey
+- [get_orders]: List orders (limit, TP, SL), optionally filtered by owner
+- [get_order]: Get single order by pubkey
+- [get_pool_data]: Get pool AUM, LP stats, utilization metrics
+
+## Preview Tools (no transactions built)
+
+- [preview_limit_order_fees]: Estimate fees, entry price, liq price for a limit order
+- [preview_exit_fee]: Estimate exit fee and price for closing a position amount
+- [preview_tp_sl]: Calculate TP/SL prices and projected PnL (forward, reverse_pnl, reverse_roi modes)
+- [preview_margin]: Preview effect of adding/removing collateral on leverage and liq price
+
+## Transaction Tools (return unsigned base64 transactions)
+
+- [open_position]: Open new perpetual position (market or limit, with optional TP/SL). Params: input_token_symbol, output_token_symbol, input_amount, leverage, trade_type, owner
+- [close_position]: Close or partially close a position. Params: position_key, input_usd, withdraw_token_symbol
+- [add_collateral]: Add margin to reduce leverage. Params: position_key, deposit_amount, deposit_token_symbol, owner
+- [remove_collateral]: Remove margin to increase leverage. Params: position_key, withdraw_amount_usd, withdraw_token_symbol, owner
+- [reverse_position]: Close current position + open opposite direction in one transaction. Params: position_key, owner
+
+## Typical Workflow
+
+1. health_check → verify API
+2. get_markets → discover markets
+3. get_prices → check current prices
+4. get_positions(owner) → check existing positions
+5. open_position(input_amount="12.0") → build trade (use $12+ for TP/SL)
+6. Show preview to user → user signs and submits
+7. get_positions(owner) → verify position opened
+
+## Configuration
+
+- FLASH_API_URL: Flash Trade API base URL (required)
+- FLASH_API_TIMEOUT: HTTP timeout in ms (default: 30000)
+- WALLET_PUBKEY: Default wallet for transaction building (optional)
+
+## Deployment
+
+Currently runs as stdio transport (local process). Production deployment requires migration to Streamable HTTP transport on Cloudflare Workers or similar platform.
+
+## Source
+
+- [CLAUDE.md](./CLAUDE.md): Full architecture, domain knowledge, and tool catalog
+- [Source Code](./src/): TypeScript, Bun runtime, @modelcontextprotocol/sdk

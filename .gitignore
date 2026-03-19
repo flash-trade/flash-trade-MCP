@@ -1,9 +1,13 @@
 # Dependencies
 node_modules/
 
+# Rust build artifacts
+target/
+
 # Build outputs
 dist/
 builds/
+out/
 
 # Environment & secrets (NEVER commit)
 .env
@@ -24,12 +28,13 @@ Thumbs.db
 # Logs
 *.log
 
-# Lock files (bun.lock IS committed — it's the dependency lock)
-# Do NOT add bun.lock here
+# Lock files (bun.lock and Cargo.lock ARE committed for reproducible builds)
+# Do NOT add bun.lock or Cargo.lock here
 
 # IDE
 .idea/
 .vscode/
+.cursor/
 *.code-workspace
 
 # Runtime / test artifacts
@@ -37,9 +42,17 @@ coverage/
 .nyc_output/
 *.pid
 *.seed
+*.lcov
+*.tsbuildinfo
+.cache
+.eslintcache
 
 # CLI user config (generated at runtime in ~/.config/flash/)
-# Not in this repo, but just in case
 settings.json
 history.jsonl
 keys/
+
+# MEMORY/WORK (algorithm artifacts)
+MEMORY/
+mcp/IMPLEMENTATION_PLAN.md
+cli/CLI_IMPLEMENTATION_PLAN.md

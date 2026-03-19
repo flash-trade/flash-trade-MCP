@@ -1,0 +1,28 @@
+#!/usr/bin/env bun
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
+import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
+import { loadConfig } from './config.ts'
+import { FlashApiClient } from './client/flash-api.ts'
+import { registerReadTools, registerTransactionTools, registerPreviewTools } from './tools/index.ts'
+import { registerResources } from './resources/index.ts'
+
+const config = loadConfig()
+const client = new FlashApiClient(config)
+
+const server = new McpServer({
+  name: 'flash-trade',
+  version: '0.1.0',
+}, {
+  capabilities: {
+    tools: {},
+    resources: {},
+  },
+})
+
+registerReadTools(server, client)
+registerTransactionTools(server, client)
+registerPreviewTools(server, client)
+registerResources(server, client)
+
+const transport = new StdioServerTransport()
+await server.connect(transport)

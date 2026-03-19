@@ -82,7 +82,8 @@ SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Optional: RPC for sign_and_
 | **Stop-Loss (SL)** | Closes position to limit loss | >$10 after fees |
 
 - Up to 5 trigger orders (TP/SL) per position, each can close a different % of the position
-- TP and SL are set via the `take_profit` and `stop_loss` params on `open_position`, or added later via the CLI
+- TP and SL can be set at open time via `take_profit`/`stop_loss` params on `open_position`
+- TP/SL can also be added, edited, or canceled on existing positions via trigger order tools
 - Use `preview_tp_sl` tool to calculate TP/SL prices and projected PnL before placing
 
 ### Position Mechanics
@@ -140,6 +141,15 @@ SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Optional: RPC for sign_and_
 | `remove_collateral` | Remove collateral (increase leverage) | `position_key`, `withdraw_amount_usd`, `withdraw_token_symbol`, `owner` |
 | `reverse_position` | Close + open opposite direction | `position_key`, `owner` |
 
+### Trigger Order Tools (TP/SL management — return unsigned base64 transactions)
+
+| Tool | Purpose | Key Params |
+|------|---------|-----------|
+| `place_trigger_order` | Place TP or SL on existing position | `market_symbol`, `collateral_symbol`, `side`, `trigger_price`, `size_amount`, `is_stop_loss`, `owner` |
+| `edit_trigger_order` | Edit existing TP/SL (change price/size) | `market_symbol`, `collateral_symbol`, `side`, `order_id`, `trigger_price`, `size_amount`, `is_stop_loss`, `owner` |
+| `cancel_trigger_order` | Cancel a single TP or SL order | `market_symbol`, `collateral_symbol`, `side`, `order_id`, `is_stop_loss`, `owner` |
+| `cancel_all_trigger_orders` | Cancel all TP/SL for a market+side | `market_symbol`, `collateral_symbol`, `side`, `owner` |
+
 ### Signing Tool
 
 | Tool | Purpose | Key Params |
@@ -161,10 +171,14 @@ The `sign_and_send` tool reads the keypair from `KEYPAIR_PATH` (default `~/.conf
 6. sign_and_send (transaction_base64)    → Sign and submit (call immediately!)
 7. get_positions (owner=<wallet>)        → Verify position opened
 8. preview_tp_sl                         → Calculate TP/SL levels
-9. close_position                        → When ready to exit
+9. place_trigger_order                   → Add TP/SL to position
+   → sign_and_send (transaction_base64)  → Sign and submit
+10. get_orders (owner=<wallet>)          → Verify trigger orders placed
+11. edit_trigger_order                    → Adjust TP/SL if needed
+12. close_position                        → When ready to exit
    → Show preview to user
    → User approves
-10. sign_and_send (transaction_base64)   → Sign and submit
+13. sign_and_send (transaction_base64)   → Sign and submit
 ```
 
 ### Common Gotchas for AI Agents

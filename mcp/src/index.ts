@@ -21,7 +21,7 @@ try {
 
   const server = new McpServer({
     name: 'flash-trade',
-    version: '0.1.0',
+    version: '0.2.0',
   }, {
     capabilities: {
       tools: {},

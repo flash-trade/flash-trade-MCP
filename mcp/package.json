@@ -1,6 +1,6 @@
 {
   "name": "flash-trade-mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "MCP server for Flash Trade — perpetual futures DEX on Solana. Provides AI agents with typed tools for trading, position management, and market data.",
   "module": "src/index.ts",
   "main": "dist/index.js",
@@ -39,7 +39,6 @@
   "license": "MIT",
   "homepage": "https://github.com/flash-trade/flash-trade-MCP#readme",
   "devDependencies": {
-    "@solana/web3.js": "1",
     "@types/bun": "latest",
     "bs58": "^6.0.0",
     "msw": "^2.12.13",
@@ -48,6 +47,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
+    "@solana/web3.js": "1",
     "zod": "^4.3.6"
   }
 }

@@ -67,6 +67,8 @@ If you prefer Bun, replace `npx` with `bunx`:
 | `FLASH_API_URL` | Yes | — | Flash Trade API base URL (`https://flashapi.trade` for production) |
 | `FLASH_API_TIMEOUT` | No | `30000` | HTTP timeout in milliseconds |
 | `WALLET_PUBKEY` | No | — | Default wallet pubkey for transaction building |
+| `KEYPAIR_PATH` | No | `~/.config/solana/id.json` | Path to Solana keypair for `sign_and_send` tool |
+| `SOLANA_RPC_URL` | No | `https://api.mainnet-beta.solana.com` | RPC URL for transaction submission |
 
 ## Available Tools
 
@@ -108,6 +110,14 @@ If you prefer Bun, replace `npx` with `bunx`:
 | `remove_collateral` | Remove collateral to increase leverage |
 | `reverse_position` | Close + open opposite direction |
 
+### Signing Tool
+
+| Tool | Description |
+|------|-------------|
+| `sign_and_send` | Sign a base64 transaction with local Solana keypair and submit to mainnet |
+
+The `sign_and_send` tool reads your keypair from `KEYPAIR_PATH` (default `~/.config/solana/id.json`), signs the transaction, and submits it via `SOLANA_RPC_URL`. Call it after a transaction tool returns a `transactionBase64` and the user has approved the preview.
+
 ### Trigger Order Tools (TP/SL management)
 
 | Tool | Description |
@@ -142,7 +152,7 @@ This is on the roadmap but not yet implemented.
 
 ## Important Notes
 
-- **Non-custodial**: Transaction tools return unsigned base64 transactions. The user's wallet signs and submits.
+- **Transaction signing**: The `sign_and_send` tool can sign and submit transactions using your local Solana keypair. Transaction tools return unsigned base64 — you can use `sign_and_send` or sign manually with your own wallet.
 - **Minimum collateral >$10**: Limit orders, TP, and SL require more than $10 collateral after fees. Use at least $11-12 for positions needing TP/SL.
 - **Mainnet only**: Pyth oracle prices are mainnet only. Devnet returns stale/zero.
 - **Rate limit**: 10 requests per second.

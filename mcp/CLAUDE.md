@@ -15,7 +15,7 @@ bun run typecheck    # Type check
 ## Architecture
 
 - `src/index.ts` — Server entry, registers all tools and resources
-- `src/config.ts` — Loads FLASH_API_URL, FLASH_API_TIMEOUT, WALLET_PUBKEY from env
+- `src/config.ts` — Loads FLASH_API_URL, FLASH_API_TIMEOUT, WALLET_PUBKEY from env; KEYPAIR_PATH + SOLANA_RPC_URL used by sign_and_send
 - `src/client/` — Typed HTTP client for Flash Trade REST API
 - `src/tools/` — MCP tool definitions (one file per tool or tool group)
 - `src/resources/` — MCP resource definitions
@@ -25,7 +25,7 @@ bun run typecheck    # Type check
 
 - All tools use Zod schemas for input validation
 - HTTP client returns typed responses; errors mapped to MCP error codes
-- Non-custodial: transaction tools return base64 unsigned transactions
+- Transaction tools return base64 unsigned transactions; `sign_and_send` tool signs + submits using local keypair
 - Tool descriptions written for AI agent comprehension
 - Bun runtime — auto-loads .env, native TypeScript
 
@@ -35,7 +35,8 @@ bun run typecheck    # Type check
 FLASH_API_URL=https://flashapi.trade  # Required: Flash Trade API base URL
 FLASH_API_TIMEOUT=30000                            # Optional: HTTP timeout in ms
 WALLET_PUBKEY=<solana-pubkey>                      # Optional: default wallet for tx building
-SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Used by scripts only
+KEYPAIR_PATH=~/.config/solana/id.json              # Optional: keypair for sign_and_send (default shown)
+SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Optional: RPC for sign_and_send (default shown)
 ```
 
 ---
@@ -52,13 +53,16 @@ SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Used by scripts only
 - Exit fee is shown in `close_position` response as `fees`.
 - Hourly borrow rate applies to leveraged positions (shown as `marginFeePercentage` in open_position response).
 
-### Transaction Flow (Non-Custodial)
+### Transaction Flow
 
 1. Call a transaction tool (`open_position`, `close_position`, `add_collateral`, `remove_collateral`, `reverse_position`)
 2. Tool returns a preview (fees, prices, leverage, liquidation) AND a `transactionBase64` string
 3. **Always show the preview to the user before they sign**
-4. The user signs the base64 transaction with their wallet and submits to Solana
-5. The MCP server never touches private keys
+4. Once the user approves, call `sign_and_send` with the `transactionBase64` to sign and submit
+5. `sign_and_send` reads the local Solana keypair, signs the transaction, submits it, and returns the confirmed signature
+6. If the user prefers manual signing, they can sign the base64 transaction with their own wallet instead of using `sign_and_send`
+
+**CRITICAL: Blockhash expiry** — Solana blockhashes expire in ~60 seconds. Call `sign_and_send` promptly after receiving the `transactionBase64`. If the blockhash expires, re-call the transaction tool to get a fresh transaction and immediately call `sign_and_send`.
 
 ### Order Types
 
@@ -128,6 +132,14 @@ SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Used by scripts only
 | `remove_collateral` | Remove collateral (increase leverage) | `position_key`, `withdraw_amount_usd`, `withdraw_token_symbol`, `owner` |
 | `reverse_position` | Close + open opposite direction | `position_key`, `owner` |
 
+### Signing Tool
+
+| Tool | Purpose | Key Params |
+|------|---------|-----------|
+| `sign_and_send` | Sign a base64 transaction with local keypair and submit to Solana | `transaction_base64` |
+
+The `sign_and_send` tool reads the keypair from `KEYPAIR_PATH` (default `~/.config/solana/id.json`) and submits via `SOLANA_RPC_URL`. It returns the confirmed transaction signature and a Solscan explorer link. **Always show the transaction preview to the user and get approval before calling this tool.**
+
 ### Typical AI Agent Workflow
 
 ```
@@ -137,17 +149,22 @@ SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Used by scripts only
 4. get_positions (owner=<wallet>)        → Check existing positions
 5. open_position (input_amount="12.0")   → Build trade (use $12+ for TP/SL!)
    → Show preview to user
-   → User signs and submits transaction
-6. get_positions (owner=<wallet>)        → Verify position opened
-7. preview_tp_sl                         → Calculate TP/SL levels
-8. close_position                        → When ready to exit
+   → User approves
+6. sign_and_send (transaction_base64)    → Sign and submit (call immediately!)
+7. get_positions (owner=<wallet>)        → Verify position opened
+8. preview_tp_sl                         → Calculate TP/SL levels
+9. close_position                        → When ready to exit
+   → Show preview to user
+   → User approves
+10. sign_and_send (transaction_base64)   → Sign and submit
 ```
 
 ### Common Gotchas for AI Agents
 
 1. **$10 minimum**: Don't open $10 positions if you plan to set TP/SL — fees eat into collateral. Use $11-12 minimum.
 2. **Always preview first**: Show the user entry price, fees, leverage, and liquidation price before they sign.
-3. **Position key**: You need the position's on-chain pubkey (from `get_positions`) to close, add/remove collateral, or set TP/SL.
-4. **Slippage**: Default 0.5%. Increase for volatile markets or large positions.
-5. **Degen mode**: Must be explicitly enabled for leverage above normal limits.
-6. **Mainnet prices only**: Devnet will return stale or zero prices from Pyth oracles.
+3. **Sign immediately**: After user approves a preview, call `sign_and_send` right away. Solana blockhashes expire in ~60 seconds. If you get a "Blockhash not found" error, re-call the transaction tool and `sign_and_send` back-to-back.
+4. **Position key**: You need the position's on-chain pubkey (from `get_positions`) to close, add/remove collateral, or set TP/SL.
+5. **Slippage**: Default 0.5%. Increase for volatile markets or large positions.
+6. **Degen mode**: Must be explicitly enabled for leverage above normal limits.
+7. **Mainnet prices only**: Devnet will return stale or zero prices from Pyth oracles.

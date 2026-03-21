@@ -31,6 +31,9 @@ Thumbs.db
 # Lock files (bun.lock and Cargo.lock ARE committed for reproducible builds)
 # Do NOT add bun.lock or Cargo.lock here
 
+# Project MCP config (machine-specific absolute paths)
+.mcp.json
+
 # IDE
 .idea/
 .vscode/

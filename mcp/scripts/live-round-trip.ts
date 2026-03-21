@@ -27,8 +27,7 @@ async function signAndSend(base64Tx: string): Promise<string> {
   const txBytes = Buffer.from(base64Tx, 'base64')
   const tx = VersionedTransaction.deserialize(txBytes)
 
-  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
-  tx.message.recentBlockhash = blockhash
+  // Do NOT replace blockhash — API's additional signer already signed with it
   tx.sign([keypair])
 
   const signature = await connection.sendRawTransaction(tx.serialize(), {
@@ -36,6 +35,7 @@ async function signAndSend(base64Tx: string): Promise<string> {
     preflightCommitment: 'confirmed',
   })
 
+  const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
   const confirmation = await connection.confirmTransaction({
     signature,
     blockhash,

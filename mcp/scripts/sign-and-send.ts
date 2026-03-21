@@ -26,15 +26,14 @@ const txBytes = Buffer.from(base64Tx, 'base64')
 const tx = VersionedTransaction.deserialize(txBytes)
 console.log(`Transaction decoded: ${tx.message.compiledInstructions.length} instruction(s)`)
 
-// Get fresh blockhash
+// Do NOT replace the blockhash — the API's additional signer already signed with it.
+// Replacing it would invalidate their pre-signature and cause verification failure.
 const connection = new Connection(RPC_URL, 'confirmed')
-const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
-tx.message.recentBlockhash = blockhash
-console.log(`Blockhash: ${blockhash.slice(0, 16)}...`)
+console.log(`Blockhash (from API): ${tx.message.recentBlockhash.slice(0, 16)}...`)
 
-// Sign
+// Sign with user keypair only (API co-signature is already present)
 tx.sign([keypair])
-console.log('Transaction signed.')
+console.log('Transaction signed (preserving API co-signature).')
 
 // Send
 console.log('Sending transaction...')
@@ -46,6 +45,7 @@ console.log(`Signature: ${signature}`)
 
 // Confirm
 console.log('Confirming...')
+const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed')
 const confirmation = await connection.confirmTransaction({
   signature,
   blockhash,

@@ -2,60 +2,71 @@
 
 MCP server for [Flash Trade](https://flash.trade) perpetual DEX on Solana. Gives AI agents (Claude, GPT, etc.) tools to read market data, preview trades, and build unsigned transactions.
 
-## Prerequisites
+## Quick Start — Just Paste and Use
 
-- [Bun](https://bun.sh) v1.3+
-- A Flash Trade API URL (production: `https://flashapi.trade`)
+No cloning, no building. Add this config and restart your editor.
 
-## Setup
+### Claude Code (`.mcp.json`)
 
-```bash
-bun install
-cp .env.example .env
-# Edit .env — set FLASH_API_URL
+```json
+{
+  "mcpServers": {
+    "flash-trade": {
+      "command": "npx",
+      "args": ["-y", "flash-trade-mcp"],
+      "env": {
+        "FLASH_API_URL": "https://flashapi.trade"
+      }
+    }
+  }
+}
+```
+
+### Claude Desktop (`claude_desktop_config.json`)
+
+```json
+{
+  "mcpServers": {
+    "flash-trade": {
+      "command": "npx",
+      "args": ["-y", "flash-trade-mcp"],
+      "env": {
+        "FLASH_API_URL": "https://flashapi.trade"
+      }
+    }
+  }
+}
+```
+
+### Cursor / Windsurf
+
+Add the same JSON block to your MCP settings. Use `npx` as the command.
+
+### Using Bun instead of Node
+
+If you prefer Bun, replace `npx` with `bunx`:
+
+```json
+{
+  "mcpServers": {
+    "flash-trade": {
+      "command": "bunx",
+      "args": ["flash-trade-mcp"],
+      "env": {
+        "FLASH_API_URL": "https://flashapi.trade"
+      }
+    }
+  }
+}
 ```
 
 ## Environment Variables
 
 | Variable | Required | Default | Description |
 |----------|----------|---------|-------------|
-| `FLASH_API_URL` | Yes | — | Flash Trade API base URL |
+| `FLASH_API_URL` | Yes | — | Flash Trade API base URL (`https://flashapi.trade` for production) |
 | `FLASH_API_TIMEOUT` | No | `30000` | HTTP timeout in milliseconds |
 | `WALLET_PUBKEY` | No | — | Default wallet pubkey for transaction building |
-
-## Add to Claude Code
-
-Add to your project's `.mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "flash-trade": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/flash-trade-MCP/mcp/src/index.ts"],
-      "env": {
-        "FLASH_API_URL": "https://flashapi.trade"
-      }
-    }
-  }
-}
-```
-
-Or add to Claude Desktop's `claude_desktop_config.json`:
-
-```json
-{
-  "mcpServers": {
-    "flash-trade": {
-      "command": "bun",
-      "args": ["run", "/absolute/path/to/flash-trade-MCP/mcp/src/index.ts"],
-      "env": {
-        "FLASH_API_URL": "https://flashapi.trade"
-      }
-    }
-  }
-}
-```
 
 ## Available Tools
 
@@ -142,7 +153,8 @@ This is on the roadmap but not yet implemented.
 bun run dev          # Start MCP server (stdio transport)
 bun run test         # Run tests (26 pass, 9 skip for integration)
 bun run typecheck    # Type check
-bun run build        # Compile to binary
+bun run build        # Bundle for npm (dist/index.js, node-compatible)
+bun run build:binary # Compile to standalone binary
 ```
 
 ### Architecture

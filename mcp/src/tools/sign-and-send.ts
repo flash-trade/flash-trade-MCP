@@ -3,6 +3,18 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js'
 import fs from 'node:fs'
 
+/** Strip anything that looks like key material from error messages */
+function sanitizeError(e: unknown): string {
+  const msg = e instanceof Error ? e.message : String(e)
+  // Remove any sequences of numbers that could be key bytes (e.g. [1,2,3,...])
+  return msg
+    .replace(/\[[\d,\s]{20,}\]/g, '[REDACTED]')
+    // Remove hex strings longer than 40 chars that could be key material
+    .replace(/[0-9a-fA-F]{40,}/g, '[REDACTED]')
+    // Remove base58 strings longer than 40 chars (potential secret keys)
+    .replace(/[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{40,}/g, '[REDACTED]')
+}
+
 export function registerSignAndSendTool(server: McpServer) {
   server.registerTool('sign_and_send', {
     description:
@@ -12,7 +24,8 @@ export function registerSignAndSendTool(server: McpServer) {
       'The keypair is read from KEYPAIR_PATH (default: ~/.config/solana/id.json). ' +
       'Returns the confirmed transaction signature and a Solscan link. ' +
       'IMPORTANT: Always show the transaction preview to the user and get their approval BEFORE calling this tool. ' +
-      'This tool signs with the local keypair and submits to Solana mainnet — the action is IRREVERSIBLE.',
+      'This tool signs with the local keypair and submits to Solana mainnet — the action is IRREVERSIBLE. ' +
+      'NOTE: This tool never exposes private key material in its output.',
     inputSchema: {
       transaction_base64: z.string().describe('The base64-encoded unsigned transaction returned by a transaction tool'),
     },
@@ -20,15 +33,29 @@ export function registerSignAndSendTool(server: McpServer) {
     const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.mainnet-beta.solana.com'
     const keypairPath = process.env.KEYPAIR_PATH ?? `${process.env.HOME}/.config/solana/id.json`
 
-    // Load keypair
+    // Load keypair — all errors sanitized to prevent key leakage
     let keypair: Keypair
     try {
-      const keypairData = JSON.parse(fs.readFileSync(keypairPath, 'utf-8'))
+      const raw = fs.readFileSync(keypairPath, 'utf-8')
+      let keypairData: number[]
+      try {
+        keypairData = JSON.parse(raw)
+      } catch {
+        return {
+          content: [{ type: 'text' as const, text: `Keypair file at ${keypairPath} is not valid JSON.` }],
+          isError: true,
+        }
+      }
+      if (!Array.isArray(keypairData) || keypairData.length !== 64) {
+        return {
+          content: [{ type: 'text' as const, text: `Keypair file at ${keypairPath} does not contain a valid 64-byte Solana keypair.` }],
+          isError: true,
+        }
+      }
       keypair = Keypair.fromSecretKey(Uint8Array.from(keypairData))
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
       return {
-        content: [{ type: 'text' as const, text: `Failed to load keypair from ${keypairPath}: ${msg}` }],
+        content: [{ type: 'text' as const, text: `Failed to load keypair from ${keypairPath}: ${sanitizeError(e)}` }],
         isError: true,
       }
     }
@@ -39,9 +66,8 @@ export function registerSignAndSendTool(server: McpServer) {
       const txBytes = Buffer.from(params.transaction_base64, 'base64')
       tx = VersionedTransaction.deserialize(txBytes)
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
       return {
-        content: [{ type: 'text' as const, text: `Failed to decode transaction: ${msg}` }],
+        content: [{ type: 'text' as const, text: `Failed to decode transaction: ${sanitizeError(e)}` }],
         isError: true,
       }
     }
@@ -74,14 +100,12 @@ export function registerSignAndSendTool(server: McpServer) {
       const lines = [
         '=== Transaction Confirmed ===',
         `Signature: ${signature}`,
-        `Wallet: ${keypair.publicKey.toBase58()}`,
         `Explorer: https://solscan.io/tx/${signature}`,
       ]
       return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e)
       return {
-        content: [{ type: 'text' as const, text: `Transaction send failed: ${msg}` }],
+        content: [{ type: 'text' as const, text: `Transaction send failed: ${sanitizeError(e)}` }],
         isError: true,
       }
     }

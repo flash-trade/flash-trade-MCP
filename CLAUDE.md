@@ -36,7 +36,7 @@ Flash Trade is a perpetual futures DEX on Solana. Critical concepts for any cont
 - Hourly borrow rates apply to leveraged positions.
 
 ### Position Mechanics
-- Non-custodial: all transactions are unsigned base64 — the user's wallet signs and submits.
+- Transaction tools return unsigned base64. The `sign_and_send` MCP tool can sign and submit using the local Solana keypair, or the user can sign manually with their own wallet.
 - SOL positions use JitoSOL as underlying collateral on-chain.
 - Long markets use the target token as collateral (ETH/ETH, SOL/SOL).
 - Up to 5 trigger orders (TP/SL) per market position.

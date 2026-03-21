@@ -36,14 +36,25 @@ See [`cli/CLAUDE.md`](./cli/CLAUDE.md) for architecture and conventions.
 
 [Model Context Protocol](https://modelcontextprotocol.io) server that wraps the Flash Trade REST API. Designed for AI agents (Claude, GPT, etc.) to read market data and build unsigned transactions.
 
-```bash
-cd mcp
-bun install
-bun run dev                   # Start MCP server (stdio)
-bun run test                  # 26 tests
+**Quick start — just add to your editor config:**
+
+```json
+{
+  "mcpServers": {
+    "flash-trade": {
+      "command": "npx",
+      "args": ["-y", "flash-trade-mcp"],
+      "env": {
+        "FLASH_API_URL": "https://flashapi.trade"
+      }
+    }
+  }
+}
 ```
 
-See [`mcp/CLAUDE.md`](./mcp/CLAUDE.md) for tool catalog, domain knowledge, and integration guide.
+Works with Claude Code, Claude Desktop, Cursor, and Windsurf. No cloning or building needed.
+
+See [`mcp/README.md`](./mcp/README.md) for full tool catalog and [`mcp/CLAUDE.md`](./mcp/CLAUDE.md) for AI agent integration guide.
 
 ---
 

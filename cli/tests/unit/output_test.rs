@@ -1,5 +1,3 @@
-use flash_sdk::pool_config::Side;
-
 // Test color/format functions (replicated locally to avoid binary dep)
 fn format_usd(value: f64) -> String {
     let abs = value.abs();

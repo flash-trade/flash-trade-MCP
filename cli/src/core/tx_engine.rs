@@ -1,7 +1,6 @@
 use anyhow::{Context, Result};
 use flash_sdk::InstructionResult;
 use solana_sdk::compute_budget::ComputeBudgetInstruction;
-use solana_sdk::hash::Hash;
 use solana_sdk::instruction::Instruction;
 use solana_sdk::message::{v0, VersionedMessage};
 use solana_sdk::pubkey::Pubkey;

@@ -19,7 +19,7 @@ fn test_keypair_generate_save_load_roundtrip() {
 
     let loaded_data = fs::read_to_string(&path).unwrap();
     let loaded_bytes: Vec<u8> = serde_json::from_str(&loaded_data).unwrap();
-    let loaded_keypair = Keypair::from_bytes(&loaded_bytes).unwrap();
+    let loaded_keypair = Keypair::try_from(loaded_bytes.as_slice()).unwrap();
 
     assert_eq!(loaded_keypair.pubkey(), pubkey);
 }

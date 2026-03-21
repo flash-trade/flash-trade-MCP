@@ -3,7 +3,6 @@
 export type TradeType = 'LONG' | 'SHORT'
 export type OrderType = 'MARKET' | 'LIMIT'
 export type MarginAction = 'ADD' | 'REMOVE'
-export type PrivilegeType = 'NONE' | 'REFERRAL' | 'STAKE'
 
 // === Oracle Price ===
 
@@ -124,11 +123,6 @@ export interface OpenPositionRequest {
   slippagePercentage?: string
   takeProfit?: string
   stopLoss?: string
-  tokenStakeFafAccount?: string
-  userReferralAccount?: string
-  enableFundedWallet?: boolean
-  privilege?: PrivilegeType
-  userWhitelistAccount?: string
 }
 
 export interface TriggerQuote {
@@ -171,10 +165,6 @@ export interface ClosePositionRequest {
   keepLeverageSame?: boolean
   slippagePercentage?: string
   tradingFeeDiscountPercent?: number
-  tokenStakeFafAccount?: string
-  userReferralAccount?: string
-  enableFundedWallet?: boolean
-  privilege?: PrivilegeType
 }
 
 export interface ClosePositionResponse {
@@ -253,10 +243,6 @@ export interface ReversePositionRequest {
   owner: string
   slippagePercentage?: string
   tradingFeeDiscountPercent?: number
-  tokenStakeFafAccount?: string
-  userReferralAccount?: string
-  enableFundedWallet?: boolean
-  privilege?: PrivilegeType
   degenMode?: boolean
 }
 

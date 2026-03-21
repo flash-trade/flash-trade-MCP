@@ -6,7 +6,7 @@
 import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js'
 import fs from 'node:fs'
 
-const API_URL = process.env.FLASH_API_URL ?? 'https://flash-ui-api-rust.fly.dev'
+const API_URL = process.env.FLASH_API_URL ?? 'https://flashapi.trade'
 const RPC_URL = process.env.SOLANA_RPC_URL
   ?? 'https://api.mainnet-beta.solana.com'
 const KEYPAIR_PATH = process.env.KEYPAIR_PATH ?? `${process.env.HOME}/.config/solana/id.json`

@@ -6,23 +6,37 @@ import { FlashApiClient } from './client/flash-api.ts'
 import { registerReadTools, registerTransactionTools, registerPreviewTools } from './tools/index.ts'
 import { registerResources } from './resources/index.ts'
 
-const config = loadConfig()
-const client = new FlashApiClient(config)
-
-const server = new McpServer({
-  name: 'flash-trade',
-  version: '0.1.0',
-}, {
-  capabilities: {
-    tools: {},
-    resources: {},
-  },
+process.on('uncaughtException', (err) => {
+  console.error('[flash-trade-mcp] Uncaught exception:', err)
+  process.exit(1)
+})
+process.on('unhandledRejection', (reason) => {
+  console.error('[flash-trade-mcp] Unhandled rejection:', reason)
+  process.exit(1)
 })
 
-registerReadTools(server, client)
-registerTransactionTools(server, client)
-registerPreviewTools(server, client)
-registerResources(server, client)
+try {
+  const config = loadConfig()
+  const client = new FlashApiClient(config)
 
-const transport = new StdioServerTransport()
-await server.connect(transport)
+  const server = new McpServer({
+    name: 'flash-trade',
+    version: '0.1.0',
+  }, {
+    capabilities: {
+      tools: {},
+      resources: {},
+    },
+  })
+
+  registerReadTools(server, client)
+  registerTransactionTools(server, client)
+  registerPreviewTools(server, client)
+  registerResources(server, client)
+
+  const transport = new StdioServerTransport()
+  await server.connect(transport)
+} catch (err) {
+  console.error('[flash-trade-mcp] Fatal startup error:', err)
+  process.exit(1)
+}

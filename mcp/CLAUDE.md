@@ -32,7 +32,7 @@ bun run typecheck    # Type check
 ## Environment Variables
 
 ```bash
-FLASH_API_URL=https://flash-ui-api-rust.fly.dev  # Required: Flash Trade API base URL
+FLASH_API_URL=https://flashapi.trade  # Required: Flash Trade API base URL
 FLASH_API_TIMEOUT=30000                            # Optional: HTTP timeout in ms
 WALLET_PUBKEY=<solana-pubkey>                      # Optional: default wallet for tx building
 SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Used by scripts only

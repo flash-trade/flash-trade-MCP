@@ -6,7 +6,7 @@ export function registerResources(server: McpServer, client: FlashApiClient) {
   // Global accounts snapshot (static resource — no parameters)
   server.registerResource('flash-accounts', 'flash://accounts', {
     description:
-      'Snapshot of all Flash Trade on-chain accounts: pools, custodies, markets, and global config. For real-time streaming, use the Flash Trade API SSE endpoint directly.',
+      'Snapshot of all Flash Trade on-chain accounts: pools, custodies, markets, and global config. For real-time updates, poll this resource periodically.',
     mimeType: 'application/json',
   }, async () => {
     const [pools, custodies, markets] = await Promise.all([

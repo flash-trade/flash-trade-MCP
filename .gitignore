@@ -54,5 +54,6 @@ keys/
 
 # MEMORY/WORK (algorithm artifacts)
 MEMORY/
+Plans/
 mcp/IMPLEMENTATION_PLAN.md
 cli/CLI_IMPLEMENTATION_PLAN.md

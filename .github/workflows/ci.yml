@@ -12,6 +12,10 @@ on:
       - "mcp/**"
       - ".github/workflows/ci.yml"
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 defaults:
   run:
     working-directory: mcp
@@ -20,6 +24,8 @@ jobs:
   ci:
     name: ci
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v4
 

@@ -1,6 +1,8 @@
-# flash-trade-mcp
+# flash-mcp
 
 MCP server wrapping the Flash Trade REST API for AI agent interaction.
+
+Published to NPM as [`flash-mcp`](https://www.npmjs.com/package/flash-mcp).
 
 ## Build & Dev
 
@@ -8,9 +10,15 @@ MCP server wrapping the Flash Trade REST API for AI agent interaction.
 bun install          # Install deps
 bun run dev          # Run MCP server (stdio)
 bun run test         # Run tests (26 pass, 9 skip — integration needs live API)
-bun run build        # Compile binary
+bun run build        # Compile to dist/
 bun run typecheck    # Type check
 ```
+
+## CI & Releases
+
+- **CI** (`.github/workflows/ci.yml`): Runs on PRs to `main` when `mcp/**` changes — typecheck, unit tests, build
+- **Publish** (`.github/workflows/publish.yml`): Triggers on `v*` tags — builds and publishes to NPM via OIDC trusted publishing
+- Direct pushes to `main` are blocked — all changes require a PR with passing CI
 
 ## Architecture
 

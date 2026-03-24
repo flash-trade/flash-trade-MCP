@@ -43,7 +43,7 @@ See [`cli/CLAUDE.md`](./cli/CLAUDE.md) for architecture and conventions.
   "mcpServers": {
     "flash-trade": {
       "command": "npx",
-      "args": ["-y", "flash-mcp"],
+      "args": ["-y", "flash-trade-mcp"],
       "env": {
         "FLASH_API_URL": "https://flashapi.trade"
       }

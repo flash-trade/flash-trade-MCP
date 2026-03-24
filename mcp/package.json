@@ -1,12 +1,12 @@
 {
-  "name": "flash-mcp",
-  "version": "0.1.0",
+  "name": "flash-trade-mcp",
+  "version": "0.3.0",
   "description": "MCP server for Flash Trade — perpetual futures DEX on Solana. Provides AI agents with typed tools for trading, position management, and market data.",
   "module": "src/index.ts",
   "main": "dist/index.js",
   "type": "module",
   "bin": {
-    "flash-mcp": "dist/index.js"
+    "flash-trade-mcp": "dist/index.js"
   },
   "files": [
     "dist"

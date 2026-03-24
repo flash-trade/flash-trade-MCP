@@ -43,7 +43,7 @@ See [`cli/CLAUDE.md`](./cli/CLAUDE.md) for architecture and conventions.
   "mcpServers": {
     "flash-trade": {
       "command": "npx",
-      "args": ["-y", "flash-trade-mcp"],
+      "args": ["-y", "flash-mcp"],
       "env": {
         "FLASH_API_URL": "https://flashapi.trade"
       }
@@ -76,6 +76,31 @@ export SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
 ```
 
 For better performance, use a dedicated RPC (Helius, Triton, etc.).
+
+---
+
+## Contributing
+
+All changes go through pull requests — direct pushes to `main` are blocked.
+
+1. Create a feature branch
+2. Make changes, push, open a PR
+3. CI runs automatically (typecheck, unit tests, build)
+4. PR can only merge once CI passes
+
+## Releasing to NPM
+
+Publishing is **not automatic on merge**. It only happens when you push a version tag:
+
+```bash
+# 1. Bump version in mcp/package.json (in a PR, merge it)
+# 2. Tag the merge commit on main:
+git tag v0.1.0
+git push origin v0.1.0
+# 3. The publish workflow triggers automatically → builds → publishes to NPM
+```
+
+No tag = no publish. Merging PRs only runs CI checks.
 
 ---
 

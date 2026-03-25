@@ -72,12 +72,19 @@ export function registerOpenPositionTool(server: McpServer, client: FlashApiClie
       stopLoss: params.stop_loss,
       degenMode: params.degen_mode,
     })
-    const text = formatOpenPreview({
+    let text = formatOpenPreview({
       outputTokenSymbol: params.output_token_symbol,
       tradeType: params.trade_type,
       inputTokenSymbol: params.input_token_symbol,
       inputAmountUi: params.input_amount,
     }, res)
+    if ((params.take_profit || params.stop_loss)) {
+      const collateral = parseFloat(res.youPayUsdUi || '0')
+      const fee = parseFloat(res.entryFee || '0')
+      if (collateral - fee < 10) {
+        text += '\n\nWARNING: Collateral after fees is below $10. Take-profit and stop-loss orders require >$10 collateral and will FAIL on-chain. Use at least $11-12 input_amount.'
+      }
+    }
     return { content: [{ type: 'text' as const, text }] }
   })
 }

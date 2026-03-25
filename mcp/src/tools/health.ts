@@ -9,7 +9,9 @@ export function registerHealthTools(server: McpServer, client: FlashApiClient) {
     const health = await client.getHealth()
     const lines = [`Status: ${health.status}`]
     for (const [key, val] of Object.entries(health)) {
-      if (key !== 'status') lines.push(`${key}: ${val}`)
+      if (key !== 'status') {
+        lines.push(`${key}: ${typeof val === 'object' ? JSON.stringify(val) : val}`)
+      }
     }
     return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
   })

@@ -7,8 +7,19 @@ export function registerPoolTools(server: McpServer, client: FlashApiClient) {
     description:
       'List all liquidity pools on Flash Trade. Pools hold the collateral that backs perpetual positions. Returns pool addresses and configuration.',
   }, async () => {
-    const pools = await client.getPools()
-    return { content: [{ type: 'text' as const, text: JSON.stringify(pools, null, 2) }] }
+    const pools = await client.getPools() as any[]
+    const lines = [
+      `${pools.length} pools available:\n`,
+      'Pool Name      | Custodies | Pubkey',
+      '---------------|-----------|----------------------------------------------',
+    ]
+    for (const p of pools) {
+      const name = (p.account?.name ?? 'Unknown').padEnd(15)
+      const custodyCount = String(p.account?.custodies?.length ?? 0).padEnd(10)
+      lines.push(`${name}| ${custodyCount}| ${p.pubkey}`)
+    }
+    lines.push('\nUse get_pool with a pubkey for full details. Use get_pool_data for AUM and utilization metrics.')
+    return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
   })
 
   server.registerTool('get_pool', {

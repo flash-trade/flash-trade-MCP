@@ -16,7 +16,22 @@ export function registerPoolDataTools(server: McpServer, client: FlashApiClient)
       const snapshot = await client.getPoolSnapshot(pool_pubkey)
       return { content: [{ type: 'text' as const, text: JSON.stringify(snapshot, null, 2) }] }
     }
-    const data = await client.getPoolData()
-    return { content: [{ type: 'text' as const, text: JSON.stringify(data, null, 2) }] }
+    const raw = await client.getPoolData() as any
+    const pools = raw.pools ?? raw
+    const lines = [
+      `${pools.length} pools:\n`,
+      'Pool           | AUM          | LP Price | Stable% | Custodies',
+      '---------------|--------------|----------|---------|----------',
+    ]
+    for (const p of pools) {
+      const name = (p.poolName ?? 'Unknown').padEnd(15)
+      const aum = `$${p.lpStats?.totalPoolValueUsd ?? '?'}`.padEnd(14)
+      const lp = `$${p.lpStats?.lpPrice ?? '?'}`.padEnd(9)
+      const stable = `${p.lpStats?.stableCoinPercentage ?? '?'}%`.padEnd(8)
+      const custodies = (p.custodyStats ?? []).map((c: any) => c.symbol).join(', ')
+      lines.push(`${name}| ${aum}| ${lp}| ${stable}| ${custodies}`)
+    }
+    lines.push('\nUse get_pool_data with pool_pubkey for full custody stats.')
+    return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
   })
 }

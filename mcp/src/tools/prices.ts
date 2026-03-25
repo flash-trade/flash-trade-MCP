@@ -26,11 +26,11 @@ export function registerPriceTools(server: McpServer, client: FlashApiClient) {
   }, async ({ symbol }) => {
     const data = await client.getPrice(symbol)
     const usd = formatPrice(data.price, data.exponent)
-    return {
-      content: [{
-        type: 'text' as const,
-        text: `${symbol.toUpperCase()}: $${usd}\nRaw: ${data.price} (exp: ${data.exponent})\nTimestamp: ${data.timestamp}`,
-      }],
-    }
+    const lines = [
+      `${symbol.toUpperCase()}: $${usd}`,
+      `Raw: ${data.price} (exp: ${data.exponent})`,
+    ]
+    if (data.timestamp) lines.push(`Timestamp: ${data.timestamp}`)
+    return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
   })
 }

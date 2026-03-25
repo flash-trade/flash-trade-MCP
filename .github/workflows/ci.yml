@@ -38,24 +38,6 @@ jobs:
       - name: Build
         run: bun run build
 
-  cli:
-    name: cli
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    defaults:
-      run:
-        working-directory: cli
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: dtolnay/rust-toolchain@stable
-
-      - name: Build
-        run: cargo build
-
-      - name: Clippy
-        run: cargo clippy -- -D warnings
-
-      - name: Test
-        run: cargo test
+  # CLI job disabled — flash-sdk is in a private repo (flash-trade/flash-contracts-closed)
+  # and CI runners can't authenticate without a PAT secret. Re-enable when flash-sdk is
+  # published to crates.io or the contracts repo is made public.

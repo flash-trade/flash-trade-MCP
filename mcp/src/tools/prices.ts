@@ -22,7 +22,7 @@ export function registerPriceTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('get_price', {
     description:
       'Get the current oracle price for a specific asset symbol (e.g., "SOL", "BTC", "ETH"). Case-insensitive. Returns price in USD with timestamp.',
-    inputSchema: { symbol: z.string().describe('Asset symbol, e.g. "SOL", "BTC", "ETH"') },
+    inputSchema: { symbol: z.string().max(16).describe('Asset symbol, e.g. "SOL", "BTC", "ETH"') },
   }, async ({ symbol }) => {
     const data = await client.getPrice(symbol)
     const usd = formatPrice(data.price, data.exponent)

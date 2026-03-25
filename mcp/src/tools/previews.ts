@@ -7,11 +7,11 @@ export function registerPreviewTools(server: McpServer, client: FlashApiClient) 
     description:
       'Preview the entry price, fees, liquidation price, and borrow rate for a limit order BEFORE placing it. Use this to evaluate a trade before committing. No transaction is built.',
     inputSchema: {
-      market_symbol: z.string().describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
-      input_amount: z.string().describe('Collateral amount in UI format'),
-      output_amount: z.string().describe('Position size in target token'),
+      market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
+      input_amount: z.string().max(32).describe('Collateral amount in UI format'),
+      output_amount: z.string().max(32).describe('Position size in target token'),
       side: z.enum(['LONG', 'SHORT']).describe('Trade direction'),
-      limit_price: z.string().optional().describe('Limit price; uses live price if omitted'),
+      limit_price: z.string().max(32).optional().describe('Limit price; uses live price if omitted'),
       trading_fee_discount_percent: z.number().optional().describe('Fee discount from FAF staking (0-100)'),
     },
   }, async (params) => {
@@ -38,8 +38,8 @@ export function registerPreviewTools(server: McpServer, client: FlashApiClient) 
     description:
       'Preview the exit fee and exit price for closing a specific amount of a position. Use this to estimate close costs before calling close_position. No transaction is built.',
     inputSchema: {
-      position_key: z.string().describe('Position account pubkey'),
-      close_amount_usd: z.string().describe('USD amount to close'),
+      position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey'),
+      close_amount_usd: z.string().max(32).describe('USD amount to close'),
     },
   }, async (params) => {
     const res = await client.previewExitFee({
@@ -60,14 +60,14 @@ export function registerPreviewTools(server: McpServer, client: FlashApiClient) 
       'Calculate take-profit or stop-loss prices and projected PnL. Three modes: "forward" (trigger price → PnL), "reverse_pnl" (target PnL → trigger price), "reverse_roi" (target ROI% → trigger price). Works for existing positions (by pubkey) or hypothetical orders (provide market_symbol, entry_price, size, collateral, side).',
     inputSchema: {
       mode: z.enum(['forward', 'reverse_pnl', 'reverse_roi']).describe('Calculation mode'),
-      position_key: z.string().optional().describe('Position pubkey (for existing positions)'),
-      market_symbol: z.string().optional().describe('Market symbol (for hypothetical orders)'),
-      entry_price: z.string().optional().describe('Entry price (for hypothetical orders)'),
-      size_usd: z.string().optional().describe('Position size USD (for hypothetical orders)'),
-      collateral_usd: z.string().optional().describe('Collateral USD (for hypothetical orders)'),
+      position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional().describe('Position pubkey (for existing positions)'),
+      market_symbol: z.string().max(16).optional().describe('Market symbol (for hypothetical orders)'),
+      entry_price: z.string().max(32).optional().describe('Entry price (for hypothetical orders)'),
+      size_usd: z.string().max(32).optional().describe('Position size USD (for hypothetical orders)'),
+      collateral_usd: z.string().max(32).optional().describe('Collateral USD (for hypothetical orders)'),
       side: z.enum(['LONG', 'SHORT']).optional().describe('Side (for hypothetical orders)'),
-      trigger_price: z.string().optional().describe('Trigger price (required for "forward" mode)'),
-      target_pnl_usd: z.string().optional().describe('Target PnL USD (required for "reverse_pnl" mode)'),
+      trigger_price: z.string().max(32).optional().describe('Trigger price (required for "forward" mode)'),
+      target_pnl_usd: z.string().max(32).optional().describe('Target PnL USD (required for "reverse_pnl" mode)'),
       target_roi_percent: z.number().optional().describe('Target ROI% (required for "reverse_roi" mode)'),
     },
   }, async (params) => {
@@ -95,8 +95,8 @@ export function registerPreviewTools(server: McpServer, client: FlashApiClient) 
     description:
       'Preview the effect of adding or removing margin (collateral) on a position. Shows new leverage, new liquidation price, and max adjustable amount. Use this before calling add_collateral or remove_collateral. No transaction is built.',
     inputSchema: {
-      position_key: z.string().describe('Position account pubkey'),
-      margin_delta_usd: z.string().describe('Amount in USD to add or remove'),
+      position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey'),
+      margin_delta_usd: z.string().max(32).describe('Amount in USD to add or remove'),
       action: z.enum(['ADD', 'REMOVE']).describe('ADD to reduce leverage, REMOVE to increase leverage'),
     },
   }, async (params) => {

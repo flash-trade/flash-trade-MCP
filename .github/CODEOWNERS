@@ -1,0 +1,10 @@
+# Security-critical files require maintainer review
+mcp/src/tools/sign-and-send.ts @flash-trade/maintainers
+mcp/src/sanitize.ts @flash-trade/maintainers
+mcp/src/config.ts @flash-trade/maintainers
+mcp/src/client/errors.ts @flash-trade/maintainers
+mcp/src/index.ts @flash-trade/maintainers
+cli/src/core/wallet.rs @flash-trade/maintainers
+cli/src/cli/keys.rs @flash-trade/maintainers
+.github/ @flash-trade/maintainers
+SECURITY.md @flash-trade/maintainers

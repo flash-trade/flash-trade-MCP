@@ -139,7 +139,7 @@ export function registerMarketTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('get_market', {
     description:
       'Get detailed information about a specific market by its on-chain account pubkey. Returns full market configuration including permissions and collective position data.',
-    inputSchema: { pubkey: z.string().describe('Solana pubkey of the market account') },
+    inputSchema: { pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Solana pubkey of the market account') },
   }, async ({ pubkey }) => {
     const market = await client.getMarket(pubkey)
     return { content: [{ type: 'text' as const, text: JSON.stringify(market, null, 2) }] }

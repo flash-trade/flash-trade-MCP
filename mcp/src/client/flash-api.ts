@@ -49,7 +49,7 @@ export class FlashApiClient {
   }
 
   async getMarket(pubkey: string): Promise<unknown> {
-    return this.get(`/markets/${pubkey}`)
+    return this.get(`/markets/${encodeURIComponent(pubkey)}`)
   }
 
   // ── Pools ──
@@ -59,7 +59,7 @@ export class FlashApiClient {
   }
 
   async getPool(pubkey: string): Promise<unknown> {
-    return this.get(`/pools/${pubkey}`)
+    return this.get(`/pools/${encodeURIComponent(pubkey)}`)
   }
 
   // ── Custodies ──
@@ -69,7 +69,7 @@ export class FlashApiClient {
   }
 
   async getCustody(pubkey: string): Promise<unknown> {
-    return this.get(`/custodies/${pubkey}`)
+    return this.get(`/custodies/${encodeURIComponent(pubkey)}`)
   }
 
   // ── Prices ──
@@ -79,37 +79,37 @@ export class FlashApiClient {
   }
 
   async getPrice(symbol: string): Promise<T.PriceData> {
-    return this.get(`/prices/${symbol}`)
+    return this.get(`/prices/${encodeURIComponent(symbol)}`)
   }
 
   // ── Positions ──
 
   async getPositions(owner?: string): Promise<unknown[]> {
-    const query = owner ? `?owner=${owner}` : ''
+    const query = owner ? `?owner=${encodeURIComponent(owner)}` : ''
     return this.get(`/positions${query}`)
   }
 
   async getPosition(pubkey: string): Promise<unknown> {
-    return this.get(`/positions/${pubkey}`)
+    return this.get(`/positions/${encodeURIComponent(pubkey)}`)
   }
 
   async getOwnerPositions(owner: string, includePnlInLeverage = false): Promise<T.EnrichedPosition[]> {
-    return this.get(`/positions/owner/${owner}?includePnlInLeverageDisplay=${includePnlInLeverage}`)
+    return this.get(`/positions/owner/${encodeURIComponent(owner)}?includePnlInLeverageDisplay=${includePnlInLeverage}`)
   }
 
   // ── Orders ──
 
   async getOrders(owner?: string): Promise<unknown[]> {
-    const query = owner ? `?owner=${owner}` : ''
+    const query = owner ? `?owner=${encodeURIComponent(owner)}` : ''
     return this.get(`/orders${query}`)
   }
 
   async getOrder(pubkey: string): Promise<unknown> {
-    return this.get(`/orders/${pubkey}`)
+    return this.get(`/orders/${encodeURIComponent(pubkey)}`)
   }
 
   async getOwnerOrders(owner: string): Promise<T.EnrichedOrder[]> {
-    return this.get(`/orders/owner/${owner}`)
+    return this.get(`/orders/owner/${encodeURIComponent(owner)}`)
   }
 
   // ── Pool Data ──
@@ -119,7 +119,7 @@ export class FlashApiClient {
   }
 
   async getPoolSnapshot(poolPubkey: string): Promise<unknown> {
-    return this.get(`/pool-data/${poolPubkey}`)
+    return this.get(`/pool-data/${encodeURIComponent(poolPubkey)}`)
   }
 
   // ── Transaction Builder ──

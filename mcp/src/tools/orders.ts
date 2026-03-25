@@ -22,7 +22,7 @@ export function registerOrderTools(server: McpServer, client: FlashApiClient) {
     description:
       'List open orders (limit orders, take-profit, stop-loss), optionally filtered by wallet owner. When owner is provided, returns enriched order data with computed trigger prices and sizes.',
     inputSchema: {
-      owner: z.string().optional().describe(
+      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional().describe(
         'Wallet pubkey to filter by. When provided, returns enriched orders.',
       ),
     },
@@ -41,7 +41,7 @@ export function registerOrderTools(server: McpServer, client: FlashApiClient) {
 
   server.registerTool('get_order', {
     description: 'Get a single order account by its on-chain pubkey.',
-    inputSchema: { pubkey: z.string().describe('Order account pubkey') },
+    inputSchema: { pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Order account pubkey') },
   }, async ({ pubkey }) => {
     const order = await client.getOrder(pubkey)
     return { content: [{ type: 'text' as const, text: JSON.stringify(order, null, 2) }] }

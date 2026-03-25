@@ -399,8 +399,17 @@ async fn handle_keys(command: cli::KeysCommand, formatter: &Formatter) -> Result
         } => {
             if let Some(path) = file {
                 WalletManager::import_file(&name, std::path::Path::new(&path))?;
-            } else if let Some(key) = private_key {
-                WalletManager::import_private_key(&name, &key)?;
+            } else if private_key.is_some() {
+                // Read key from stdin — never from CLI arg (shell history exposure)
+                eprint!("Enter base58-encoded private key: ");
+                std::io::Write::flush(&mut std::io::stderr())?;
+                let mut key_input = String::new();
+                std::io::stdin().read_line(&mut key_input)?;
+                let key = key_input.trim();
+                if key.is_empty() {
+                    anyhow::bail!("No private key provided");
+                }
+                WalletManager::import_private_key(&name, key)?;
             } else {
                 WalletManager::import_solana_default(&name)?;
             }

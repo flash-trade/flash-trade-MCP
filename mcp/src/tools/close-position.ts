@@ -36,11 +36,11 @@ export function registerClosePositionTool(server: McpServer, client: FlashApiCli
     description:
       'Build a transaction to close (fully or partially) an existing perpetual position. Returns a preview with PnL, fees, and receive amount, plus an unsigned transaction. For a full close, set input_usd to the position\'s full size. For a partial close, use a smaller amount. The transaction must be signed and submitted separately.',
     inputSchema: {
-      position_key: z.string().describe('Position account pubkey to close'),
-      input_usd: z.string().describe('USD amount to close, e.g. "500.00" for full or "250.00" for partial'),
-      withdraw_token_symbol: z.string().describe('Token to receive: "USDC", "SOL", etc.'),
+      position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey to close'),
+      input_usd: z.string().max(32).describe('USD amount to close, e.g. "500.00" for full or "250.00" for partial'),
+      withdraw_token_symbol: z.string().max(16).describe('Token to receive: "USDC", "SOL", etc.'),
       keep_leverage_same: z.boolean().optional().describe('Keep leverage constant during partial close'),
-      slippage_percentage: z.string().optional().describe('Default: "0.5" (0.5%)'),
+      slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
     },
   }, async (params) => {
     const res = await client.closePosition({

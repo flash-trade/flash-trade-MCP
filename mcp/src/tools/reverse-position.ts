@@ -34,9 +34,9 @@ export function registerReversePositionTool(server: McpServer, client: FlashApiC
     description:
       'Build a transaction to reverse a position (close current + open opposite direction). For example, close a LONG and open a SHORT with the same collateral. Returns combined close+open preview and a single unsigned transaction.',
     inputSchema: {
-      position_key: z.string().describe('Position account pubkey to reverse'),
-      owner: z.string().describe('Wallet pubkey'),
-      slippage_percentage: z.string().optional().describe('Default: "0.5" (0.5%)'),
+      position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey to reverse'),
+      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey'),
+      slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
       degen_mode: z.boolean().optional().describe('Enable degen mode for the new position'),
     },
   }, async (params) => {

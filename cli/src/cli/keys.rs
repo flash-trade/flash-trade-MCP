@@ -14,8 +14,8 @@ pub enum KeysCommand {
         #[arg(long, group = "source")]
         file: Option<String>,
 
-        /// Base58-encoded private key
-        #[arg(long, group = "source")]
+        /// Import via interactive private key prompt (key is NOT echoed or saved to shell history)
+        #[arg(long, group = "source", default_missing_value = "true", num_args = 0..=1)]
         private_key: Option<String>,
     },
 

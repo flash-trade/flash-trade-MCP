@@ -13,7 +13,7 @@ export function registerPoolTools(server: McpServer, client: FlashApiClient) {
 
   server.registerTool('get_pool', {
     description: 'Get detailed information about a specific pool by its on-chain account pubkey.',
-    inputSchema: { pubkey: z.string().describe('Solana pubkey of the pool account') },
+    inputSchema: { pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Solana pubkey of the pool account') },
   }, async ({ pubkey }) => {
     const pool = await client.getPool(pubkey)
     return { content: [{ type: 'text' as const, text: JSON.stringify(pool, null, 2) }] }

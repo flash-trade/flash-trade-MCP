@@ -2,18 +2,7 @@ import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import { Connection, Keypair, VersionedTransaction } from '@solana/web3.js'
 import fs from 'node:fs'
-
-/** Strip anything that looks like key material from error messages */
-function sanitizeError(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e)
-  // Remove any sequences of numbers that could be key bytes (e.g. [1,2,3,...])
-  return msg
-    .replace(/\[[\d,\s]{20,}\]/g, '[REDACTED]')
-    // Remove hex strings longer than 40 chars that could be key material
-    .replace(/[0-9a-fA-F]{40,}/g, '[REDACTED]')
-    // Remove base58 strings longer than 40 chars (potential secret keys)
-    .replace(/[123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz]{40,}/g, '[REDACTED]')
-}
+import { sanitizeError } from '../sanitize.ts'
 
 export function registerSignAndSendTool(server: McpServer) {
   server.registerTool('sign_and_send', {
@@ -27,7 +16,7 @@ export function registerSignAndSendTool(server: McpServer) {
       'This tool signs with the local keypair and submits to Solana mainnet — the action is IRREVERSIBLE. ' +
       'NOTE: This tool never exposes private key material in its output.',
     inputSchema: {
-      transaction_base64: z.string().describe('The base64-encoded unsigned transaction returned by a transaction tool'),
+      transaction_base64: z.string().max(10000).describe('The base64-encoded unsigned transaction returned by a transaction tool'),
     },
   }, async (params) => {
     const rpcUrl = process.env.SOLANA_RPC_URL ?? 'https://api.mainnet-beta.solana.com'

@@ -14,7 +14,7 @@ export function registerCustodyTools(server: McpServer, client: FlashApiClient) 
   server.registerTool('get_custody', {
     description:
       'Get detailed custody information for a specific custody account. Includes utilization, fees, and limits.',
-    inputSchema: { pubkey: z.string().describe('Solana pubkey of the custody account') },
+    inputSchema: { pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Solana pubkey of the custody account') },
   }, async ({ pubkey }) => {
     const custody = await client.getCustody(pubkey)
     return { content: [{ type: 'text' as const, text: JSON.stringify(custody, null, 2) }] }

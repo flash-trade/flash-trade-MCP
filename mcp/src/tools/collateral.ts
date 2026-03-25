@@ -42,11 +42,11 @@ export function registerCollateralTools(server: McpServer, client: FlashApiClien
     description:
       'Build a transaction to add collateral to an existing position. This reduces leverage and moves the liquidation price further from the current price (safer). Returns a preview and unsigned transaction.',
     inputSchema: {
-      position_key: z.string().describe('Position account pubkey'),
-      deposit_amount: z.string().describe('Amount to deposit in UI format'),
-      deposit_token_symbol: z.string().describe('Token to deposit: "USDC", "SOL", etc.'),
-      owner: z.string().describe('Wallet pubkey'),
-      slippage_percentage: z.string().optional().describe('Default: "0.5" (0.5%)'),
+      position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey'),
+      deposit_amount: z.string().max(32).describe('Amount to deposit in UI format'),
+      deposit_token_symbol: z.string().max(16).describe('Token to deposit: "USDC", "SOL", etc.'),
+      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey'),
+      slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
     },
   }, async (params) => {
     const res = await client.addCollateral({
@@ -63,11 +63,11 @@ export function registerCollateralTools(server: McpServer, client: FlashApiClien
     description:
       'Build a transaction to remove collateral from an existing position. This increases leverage and moves the liquidation price closer (riskier). WARNING: Removing too much collateral can lead to liquidation. Returns a preview and unsigned transaction.',
     inputSchema: {
-      position_key: z.string().describe('Position account pubkey'),
-      withdraw_amount_usd: z.string().describe('USD amount to withdraw'),
-      withdraw_token_symbol: z.string().describe('Token to receive: "USDC", "SOL", etc.'),
-      owner: z.string().describe('Wallet pubkey'),
-      slippage_percentage: z.string().optional().describe('Default: "0.5" (0.5%)'),
+      position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey'),
+      withdraw_amount_usd: z.string().max(32).describe('USD amount to withdraw'),
+      withdraw_token_symbol: z.string().max(16).describe('Token to receive: "USDC", "SOL", etc.'),
+      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey'),
+      slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
     },
   }, async (params) => {
     const res = await client.removeCollateral({

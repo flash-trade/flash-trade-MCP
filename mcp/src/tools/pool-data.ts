@@ -7,7 +7,7 @@ export function registerPoolDataTools(server: McpServer, client: FlashApiClient)
     description:
       'Get computed pool metrics including AUM (assets under management), LP token stats, custody ratios, and utilization. Data is cached and refreshed every 15 seconds. Provide a pool_pubkey for a specific pool, or omit for all pools.',
     inputSchema: {
-      pool_pubkey: z.string().optional().describe(
+      pool_pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional().describe(
         'Specific pool pubkey. If omitted, returns all pool snapshots.',
       ),
     },

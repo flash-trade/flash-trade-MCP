@@ -5,13 +5,14 @@ import { loadConfig } from './config.ts'
 import { FlashApiClient } from './client/flash-api.ts'
 import { registerReadTools, registerTransactionTools, registerPreviewTools } from './tools/index.ts'
 import { registerResources } from './resources/index.ts'
+import { sanitizeError } from './sanitize.ts'
 
 process.on('uncaughtException', (err) => {
-  console.error('[flash-trade-mcp] Uncaught exception:', err)
+  console.error('[flash-trade-mcp] Uncaught exception:', sanitizeError(err))
   process.exit(1)
 })
 process.on('unhandledRejection', (reason) => {
-  console.error('[flash-trade-mcp] Unhandled rejection:', reason)
+  console.error('[flash-trade-mcp] Unhandled rejection:', sanitizeError(reason))
   process.exit(1)
 })
 
@@ -21,7 +22,7 @@ try {
 
   const server = new McpServer({
     name: 'flash-trade',
-    version: '0.2.2',
+    version: '0.3.0',
   }, {
     capabilities: {
       tools: {},
@@ -37,6 +38,6 @@ try {
   const transport = new StdioServerTransport()
   await server.connect(transport)
 } catch (err) {
-  console.error('[flash-trade-mcp] Fatal startup error:', err)
+  console.error('[flash-trade-mcp] Fatal startup error:', sanitizeError(err))
   process.exit(1)
 }

@@ -22,7 +22,7 @@ export function registerPositionTools(server: McpServer, client: FlashApiClient)
     description:
       'List perpetual positions, optionally filtered by wallet owner. Without an owner filter, returns ALL open positions (may be large). With owner, returns enriched positions with computed PnL, leverage, and liquidation price.',
     inputSchema: {
-      owner: z.string().optional().describe(
+      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional().describe(
         'Wallet pubkey to filter by. When provided, returns enriched positions with PnL, leverage, and liquidation price.',
       ),
     },
@@ -42,7 +42,7 @@ export function registerPositionTools(server: McpServer, client: FlashApiClient)
   server.registerTool('get_position', {
     description:
       'Get a single position by its on-chain account pubkey. Returns raw position data. For enriched data (PnL, leverage, liq price), use get_positions with the owner filter instead.',
-    inputSchema: { pubkey: z.string().describe('Position account pubkey') },
+    inputSchema: { pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey') },
   }, async ({ pubkey }) => {
     const position = await client.getPosition(pubkey)
     return { content: [{ type: 'text' as const, text: JSON.stringify(position, null, 2) }] }

@@ -1,12 +1,15 @@
 export class FlashApiError extends Error {
+  public readonly responseBody?: string
+
   constructor(
     message: string,
     public readonly statusCode: number,
     public readonly endpoint: string,
-    public readonly responseBody?: string,
+    responseBody?: string,
   ) {
     super(`Flash API error [${statusCode}] ${endpoint}: ${message}`)
     this.name = 'FlashApiError'
+    this.responseBody = responseBody?.slice(0, 500)
   }
 }
 

@@ -332,6 +332,71 @@ export interface PreviewMarginResponse {
   err?: string
 }
 
+// === Transaction Builder: Place Trigger Order ===
+
+export interface PlaceTriggerOrderRequest {
+  marketSymbol: string
+  collateralSymbol: string
+  side: TradeType
+  triggerPriceUi: string
+  sizeAmountUi: string
+  isStopLoss: boolean
+  owner: string
+}
+
+export interface PlaceTriggerOrderResponse {
+  transactionBase64?: string
+  err?: string
+}
+
+// === Transaction Builder: Edit Trigger Order ===
+
+export interface EditTriggerOrderRequest {
+  marketSymbol: string
+  collateralSymbol: string
+  side: TradeType
+  orderId: number
+  triggerPriceUi: string
+  sizeAmountUi: string
+  isStopLoss: boolean
+  owner: string
+}
+
+export interface EditTriggerOrderResponse {
+  transactionBase64?: string
+  err?: string
+}
+
+// === Transaction Builder: Cancel Trigger Order ===
+
+export interface CancelTriggerOrderRequest {
+  marketSymbol: string
+  collateralSymbol: string
+  side: TradeType
+  orderId: number
+  isStopLoss: boolean
+  owner: string
+}
+
+export interface CancelTriggerOrderResponse {
+  transactionBase64?: string
+  err?: string
+}
+
+// === Transaction Builder: Cancel All Trigger Orders ===
+
+export interface CancelAllTriggerOrdersRequest {
+  marketSymbol: string
+  collateralSymbol: string
+  side: TradeType
+  owner: string
+}
+
+export interface CancelAllTriggerOrdersResponse {
+  transactionBase64?: string
+  err?: string
+}
+
 // === Health ===
 
 export interface HealthResponse {

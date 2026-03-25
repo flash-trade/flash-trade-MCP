@@ -144,6 +144,22 @@ export class FlashApiClient {
     return this.post('/transaction-builder/reverse-position', req)
   }
 
+  async placeTriggerOrder(req: T.PlaceTriggerOrderRequest): Promise<T.PlaceTriggerOrderResponse> {
+    return this.post('/transaction-builder/place-trigger-order', req)
+  }
+
+  async editTriggerOrder(req: T.EditTriggerOrderRequest): Promise<T.EditTriggerOrderResponse> {
+    return this.post('/transaction-builder/edit-trigger-order', req)
+  }
+
+  async cancelTriggerOrder(req: T.CancelTriggerOrderRequest): Promise<T.CancelTriggerOrderResponse> {
+    return this.post('/transaction-builder/cancel-trigger-order', req)
+  }
+
+  async cancelAllTriggerOrders(req: T.CancelAllTriggerOrdersRequest): Promise<T.CancelAllTriggerOrdersResponse> {
+    return this.post('/transaction-builder/cancel-all-trigger-orders', req)
+  }
+
   // ── Previews ──
 
   async previewLimitOrderFees(req: T.PreviewLimitOrderFeesRequest): Promise<T.PreviewLimitOrderFeesResponse> {

@@ -14,6 +14,7 @@ import { registerCollateralTools } from './collateral.ts'
 import { registerReversePositionTool } from './reverse-position.ts'
 import { registerPreviewTools } from './previews.ts'
 import { registerSignAndSendTool } from './sign-and-send.ts'
+import { registerTriggerOrderTools } from './trigger-orders.ts'
 
 export function registerReadTools(server: McpServer, client: FlashApiClient) {
   registerHealthTools(server, client)
@@ -31,6 +32,7 @@ export function registerTransactionTools(server: McpServer, client: FlashApiClie
   registerClosePositionTool(server, client)
   registerCollateralTools(server, client)
   registerReversePositionTool(server, client)
+  registerTriggerOrderTools(server, client)
   registerSignAndSendTool(server)
 }
 

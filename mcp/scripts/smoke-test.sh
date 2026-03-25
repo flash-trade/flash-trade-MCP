@@ -54,13 +54,13 @@ else:
     print('0')
 " 2>/dev/null || echo "0")
 
-echo "  Tools: $TOOL_COUNT (expected: 23)"
+echo "  Tools: $TOOL_COUNT (expected: 27)"
 echo "  Resources: $RESOURCE_COUNT (expected: 1)"
 echo "  Resource Templates: $TEMPLATE_COUNT (expected: 2)"
 
-if [ "$TOOL_COUNT" -eq 23 ] && [ "$RESOURCE_COUNT" -eq 1 ] && [ "$TEMPLATE_COUNT" -eq 2 ]; then
+if [ "$TOOL_COUNT" -eq 27 ] && [ "$RESOURCE_COUNT" -eq 1 ] && [ "$TEMPLATE_COUNT" -eq 2 ]; then
   echo ""
-  echo "PASS: All 23 tools + 3 resources registered"
+  echo "PASS: All 27 tools + 3 resources registered"
   exit 0
 else
   echo ""

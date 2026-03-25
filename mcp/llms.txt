@@ -57,6 +57,13 @@
 - [remove_collateral]: Remove margin to increase leverage. Params: position_key, withdraw_amount_usd, withdraw_token_symbol, owner
 - [reverse_position]: Close current position + open opposite direction in one transaction. Params: position_key, owner
 
+## Trigger Order Tools (TP/SL management — return unsigned base64 transactions)
+
+- [place_trigger_order]: Place a TP or SL on an existing position. Params: market_symbol, collateral_symbol, side, trigger_price, size_amount, is_stop_loss, owner
+- [edit_trigger_order]: Edit an existing TP/SL order (change price, size). Params: market_symbol, collateral_symbol, side, order_id, trigger_price, size_amount, is_stop_loss, owner
+- [cancel_trigger_order]: Cancel a single TP or SL order. Params: market_symbol, collateral_symbol, side, order_id, is_stop_loss, owner
+- [cancel_all_trigger_orders]: Cancel ALL TP/SL orders for a market+side. Params: market_symbol, collateral_symbol, side, owner
+
 ## Typical Workflow
 
 1. health_check → verify API
@@ -66,6 +73,16 @@
 5. open_position(input_amount="12.0") → build trade (use $12+ for TP/SL)
 6. Show preview to user → user signs and submits
 7. get_positions(owner) → verify position opened
+8. place_trigger_order → add TP/SL to the position
+9. get_orders(owner) → verify trigger orders placed
+
+## Managing Trigger Orders
+
+- Place: place_trigger_order with trigger_price and size_amount
+- View: get_orders(owner) shows all limit/TP/SL orders with order_id
+- Edit: edit_trigger_order with order_id from get_orders
+- Cancel one: cancel_trigger_order with order_id
+- Cancel all: cancel_all_trigger_orders for a market+side
 
 ## Configuration
 

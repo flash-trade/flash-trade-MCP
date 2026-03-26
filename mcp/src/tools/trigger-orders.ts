@@ -8,7 +8,6 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       'Place a take-profit (TP) or stop-loss (SL) trigger order on an existing position. The trigger order will automatically close part or all of the position when the price hits the trigger level. Requires an open position for the given market/side. Returns an unsigned transaction. Up to 5 trigger orders per position.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
-      collateral_symbol: z.string().max(16).describe('Collateral token, e.g. "USDC", "JITOSOL"'),
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),
       trigger_price: z.string().max(32).describe('Trigger price in UI format, e.g. "160.00"'),
       size_amount: z.string().max(32).describe('Size in target token to close when triggered, e.g. "0.5"'),
@@ -18,7 +17,6 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
   }, async (params) => {
     const res = await client.placeTriggerOrder({
       marketSymbol: params.market_symbol,
-      collateralSymbol: params.collateral_symbol,
       side: params.side,
       triggerPriceUi: params.trigger_price,
       sizeAmountUi: params.size_amount,
@@ -44,7 +42,6 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       'Edit an existing take-profit or stop-loss trigger order. Change the trigger price, size, or order type without canceling and re-placing. Requires the order_id (0-7) from get_orders. Returns an unsigned transaction.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
-      collateral_symbol: z.string().max(16).describe('Collateral token, e.g. "USDC", "JITOSOL"'),
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),
       order_id: z.coerce.number().describe('Index of the trigger order to edit (0-7)'),
       trigger_price: z.string().max(32).describe('New trigger price in UI format'),
@@ -55,7 +52,6 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
   }, async (params) => {
     const res = await client.editTriggerOrder({
       marketSymbol: params.market_symbol,
-      collateralSymbol: params.collateral_symbol,
       side: params.side,
       orderId: params.order_id,
       triggerPriceUi: params.trigger_price,
@@ -82,7 +78,6 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       'Cancel a single take-profit or stop-loss trigger order. Requires the order_id (0-7) from get_orders. Returns an unsigned transaction.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
-      collateral_symbol: z.string().max(16).describe('Collateral token, e.g. "USDC", "JITOSOL"'),
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),
       order_id: z.coerce.number().describe('Index of the trigger order to cancel (0-7)'),
       is_stop_loss: z.coerce.boolean().describe('true = stop-loss, false = take-profit'),
@@ -91,7 +86,6 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
   }, async (params) => {
     const res = await client.cancelTriggerOrder({
       marketSymbol: params.market_symbol,
-      collateralSymbol: params.collateral_symbol,
       side: params.side,
       orderId: params.order_id,
       isStopLoss: params.is_stop_loss,
@@ -114,14 +108,12 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       'Cancel ALL take-profit and stop-loss trigger orders for a market+side. Removes all TP and SL orders in one transaction. Returns an unsigned transaction.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
-      collateral_symbol: z.string().max(16).describe('Collateral token, e.g. "USDC", "JITOSOL"'),
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),
       owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (must own the orders)'),
     },
   }, async (params) => {
     const res = await client.cancelAllTriggerOrders({
       marketSymbol: params.market_symbol,
-      collateralSymbol: params.collateral_symbol,
       side: params.side,
       owner: params.owner,
     })

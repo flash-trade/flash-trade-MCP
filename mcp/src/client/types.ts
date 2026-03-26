@@ -336,7 +336,6 @@ export interface PreviewMarginResponse {
 
 export interface PlaceTriggerOrderRequest {
   marketSymbol: string
-  collateralSymbol: string
   side: TradeType
   triggerPriceUi: string
   sizeAmountUi: string
@@ -353,7 +352,6 @@ export interface PlaceTriggerOrderResponse {
 
 export interface EditTriggerOrderRequest {
   marketSymbol: string
-  collateralSymbol: string
   side: TradeType
   orderId: number
   triggerPriceUi: string
@@ -371,7 +369,6 @@ export interface EditTriggerOrderResponse {
 
 export interface CancelTriggerOrderRequest {
   marketSymbol: string
-  collateralSymbol: string
   side: TradeType
   orderId: number
   isStopLoss: boolean
@@ -387,7 +384,6 @@ export interface CancelTriggerOrderResponse {
 
 export interface CancelAllTriggerOrdersRequest {
   marketSymbol: string
-  collateralSymbol: string
   side: TradeType
   owner: string
 }

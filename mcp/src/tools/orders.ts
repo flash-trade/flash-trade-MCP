@@ -20,7 +20,7 @@ function formatEnrichedOrder(o: EnrichedOrder): string {
 export function registerOrderTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('get_orders', {
     description:
-      'List open orders (limit orders, take-profit, stop-loss), optionally filtered by wallet owner. When owner is provided, returns enriched order data with computed trigger prices and sizes.',
+      'List pending orders (limit, take-profit, stop-loss). With owner: returns enriched orders with computed trigger prices and sizes. Needed to find order_id (0-7) for edit_trigger_order or cancel_trigger_order.',
     inputSchema: {
       owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional().describe(
         'Wallet pubkey to filter by. When provided, returns enriched orders.',

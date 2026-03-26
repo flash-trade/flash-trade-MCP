@@ -43,7 +43,9 @@ function formatOpenPreview(req: { outputTokenSymbol: string; tradeType: string; 
 export function registerOpenPositionTool(server: McpServer, client: FlashApiClient) {
   server.registerTool('open_position', {
     description:
-      'Build a transaction to open a new perpetual position on Flash Trade. Returns a preview (entry price, fees, leverage, liquidation price) AND an unsigned transaction. The transaction must be signed by the user\'s wallet and submitted to Solana separately. IMPORTANT: Always present the preview to the user before they sign. This tool does NOT execute the trade. Supports both MARKET and LIMIT orders, with optional take-profit and stop-loss. COLLATERAL WARNING: Limit orders, take-profit, and stop-loss require >$10 collateral AFTER entry fees. A $10 position will have fees deducted, dropping collateral below $10 and preventing TP/SL/limit orders. Use at least $11-12 input_amount when planning to set TP/SL.',
+      'Build a transaction to open a new perpetual futures position. Returns a preview (entry price, fees, leverage, liquidation price) AND an unsigned transaction. ' +
+      'Show the preview to the user before signing. Supports MARKET and LIMIT orders with optional TP/SL. ' +
+      'IMPORTANT: Use at least $11 input_amount if setting take_profit or stop_loss — collateral after fees must exceed $10 for TP/SL to work on-chain.',
     inputSchema: {
       input_token_symbol: z.string().max(16).describe('Token to pay with: "USDC", "SOL", etc.'),
       output_token_symbol: z.string().max(16).describe('Market to trade: "SOL", "BTC", "ETH", etc.'),

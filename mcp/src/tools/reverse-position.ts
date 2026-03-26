@@ -33,7 +33,8 @@ function formatReversePreview(res: ReversePositionResponse): string {
 export function registerReversePositionTool(server: McpServer, client: FlashApiClient) {
   server.registerTool('reverse_position', {
     description:
-      'Build a transaction to reverse a position (close current + open opposite direction). For example, close a LONG and open a SHORT with the same collateral. Returns combined close+open preview and a single unsigned transaction.',
+      'Build a transaction to reverse a position (close current + open opposite direction). For example, close a LONG and open a SHORT with same collateral. ' +
+      'Returns combined preview and a single unsigned transaction. Requires position_key from get_positions.',
     inputSchema: {
       position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey to reverse'),
       owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey'),

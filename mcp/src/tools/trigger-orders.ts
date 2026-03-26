@@ -6,7 +6,8 @@ import { zBool } from '../sanitize.ts'
 export function registerTriggerOrderTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('place_trigger_order', {
     description:
-      'Place a take-profit (TP) or stop-loss (SL) trigger order on an existing position. The trigger order will automatically close part or all of the position when the price hits the trigger level. Requires an open position for the given market/side. Returns an unsigned transaction. Up to 5 trigger orders per position.',
+      'Place a take-profit (TP) or stop-loss (SL) trigger order on an existing position. Up to 5 per position. ' +
+      'Use preview_tp_sl first to calculate optimal trigger prices. Returns unsigned transaction.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),
@@ -34,13 +35,14 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
     if (res.transactionBase64) {
       lines.push(`\nTransaction (base64, unsigned — sign with wallet):`)
       lines.push(res.transactionBase64)
+      lines.push(`\nNext: After signing, call get_orders with owner to see the order ID for editing/canceling.`)
     }
     return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
   })
 
   server.registerTool('edit_trigger_order', {
     description:
-      'Edit an existing take-profit or stop-loss trigger order. Change the trigger price, size, or order type without canceling and re-placing. Requires the order_id (0-7) from get_orders. Returns an unsigned transaction.',
+      'Edit an existing TP or SL trigger order. Change trigger price, size, or type. Requires order_id (0-7) from get_orders. Returns unsigned transaction.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),
@@ -76,7 +78,7 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
 
   server.registerTool('cancel_trigger_order', {
     description:
-      'Cancel a single take-profit or stop-loss trigger order. Requires the order_id (0-7) from get_orders. Returns an unsigned transaction.',
+      'Cancel a single TP or SL trigger order. Requires order_id (0-7) from get_orders. Returns unsigned transaction.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),
@@ -106,7 +108,7 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
 
   server.registerTool('cancel_all_trigger_orders', {
     description:
-      'Cancel ALL take-profit and stop-loss trigger orders for a market+side. Removes all TP and SL orders in one transaction. Returns an unsigned transaction.',
+      'Cancel ALL TP and SL trigger orders for a market+side in one transaction. Returns unsigned transaction.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),

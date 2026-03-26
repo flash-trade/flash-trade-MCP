@@ -20,8 +20,9 @@ describe('FlashApiClient — GET endpoints', () => {
   })
 
   it('getMarket returns single market', async () => {
-    const market = await client.getMarket('mkt1')
-    expect(market).toEqual({ pubkey: 'mkt1', symbol: 'SOL' })
+    const market = await client.getMarket('mkt1') as any
+    expect(market.pubkey).toBe('mkt1')
+    expect(market.account.side).toBe('Long')
   })
 
   it('getPrices returns price map', async () => {
@@ -64,9 +65,10 @@ describe('FlashApiClient — GET endpoints', () => {
     expect(positions[0]!.leverageUi).toBe('5.00')
   })
 
-  it('getPoolData returns array', async () => {
-    const data = await client.getPoolData()
-    expect(data).toHaveLength(1)
+  it('getPoolData returns pool data object', async () => {
+    const data = await client.getPoolData() as any
+    expect(data.pools).toHaveLength(1)
+    expect(data.pools[0].poolName).toBe('Crypto.1')
   })
 
   it('getPoolSnapshot returns single pool', async () => {

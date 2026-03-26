@@ -7,14 +7,10 @@ import { sanitizeError } from '../sanitize.ts'
 export function registerSignAndSendTool(server: McpServer) {
   server.registerTool('sign_and_send', {
     description:
-      'Sign and submit a base64-encoded unsigned Solana transaction using the locally configured keypair. ' +
-      'Call this AFTER a transaction tool (open_position, close_position, add_collateral, remove_collateral, reverse_position) ' +
-      'returns a transactionBase64 string AND the user has reviewed and approved the preview. ' +
-      'The keypair is read from KEYPAIR_PATH (default: ~/.config/solana/id.json). ' +
-      'Returns the confirmed transaction signature and a Solscan link. ' +
-      'IMPORTANT: Always show the transaction preview to the user and get their approval BEFORE calling this tool. ' +
-      'This tool signs with the local keypair and submits to Solana mainnet — the action is IRREVERSIBLE. ' +
-      'NOTE: This tool never exposes private key material in its output.',
+      'Sign and submit a base64 transaction to Solana mainnet using the local keypair. ' +
+      'Call ONLY after a transaction tool returns transactionBase64 AND the user has approved the preview. ' +
+      'IRREVERSIBLE — always confirm with user first. Call immediately — blockhashes expire in ~60 seconds. ' +
+      'Returns the confirmed signature and a Solscan link.',
     inputSchema: {
       transaction_base64: z.string().max(10000).describe('The base64-encoded unsigned transaction returned by a transaction tool'),
     },
@@ -90,11 +86,18 @@ export function registerSignAndSendTool(server: McpServer) {
         '=== Transaction Confirmed ===',
         `Signature: ${signature}`,
         `Explorer: https://solscan.io/tx/${signature}`,
+        '',
+        'Next: Call get_positions (with owner) to verify the position, or get_orders to check trigger orders.',
       ]
       return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
     } catch (e) {
+      const msg = sanitizeError(e)
+      const isBlockhashExpired = msg.includes('Blockhash not found') || msg.includes('block height exceeded')
+      const hint = isBlockhashExpired
+        ? '\n\nThe blockhash has expired (~60 seconds). Re-call the original transaction tool to get a fresh transaction, then call sign_and_send immediately.'
+        : ''
       return {
-        content: [{ type: 'text' as const, text: `Transaction send failed: ${sanitizeError(e)}` }],
+        content: [{ type: 'text' as const, text: `Transaction send failed: ${msg}${hint}` }],
         isError: true,
       }
     }

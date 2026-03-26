@@ -59,7 +59,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)('MCP protocol', () => {
     expect(response.result.capabilities.tools).toBeDefined()
   })
 
-  it('lists all 23 tools', async () => {
+  it('lists all 29 tools', async () => {
     const proc = spawn('bun', ['run', 'src/index.ts'], {
       cwd: process.cwd(),
       env: { ...process.env, FLASH_API_URL: process.env.FLASH_API_URL ?? 'http://localhost:3000' },
@@ -79,12 +79,16 @@ describe.skipIf(!process.env.RUN_INTEGRATION)('MCP protocol', () => {
     expect(toolsResponse).toBeDefined()
 
     const parsed = JSON.parse(toolsResponse!) as { result: { tools: { name: string }[] } }
-    expect(parsed.result.tools).toHaveLength(23)
+    expect(parsed.result.tools).toHaveLength(29)
 
     const names = parsed.result.tools.map(t => t.name)
     expect(names).toContain('health_check')
     expect(names).toContain('open_position')
     expect(names).toContain('preview_tp_sl')
     expect(names).toContain('get_pool_data')
+    expect(names).toContain('get_account_summary')
+    expect(names).toContain('get_trading_overview')
+    expect(names).toContain('place_trigger_order')
+    expect(names).toContain('cancel_all_trigger_orders')
   })
 })

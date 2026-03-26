@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
+import { zBool } from '../sanitize.ts'
 import type { OpenPositionResponse } from '../client/types.ts'
 
 function formatOpenPreview(req: { outputTokenSymbol: string; tradeType: string; inputTokenSymbol: string; inputAmountUi: string }, res: OpenPositionResponse): string {
@@ -55,7 +56,7 @@ export function registerOpenPositionTool(server: McpServer, client: FlashApiClie
       slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
       take_profit: z.string().max(32).optional().describe('TP trigger price in UI format'),
       stop_loss: z.string().max(32).optional().describe('SL trigger price in UI format'),
-      degen_mode: z.coerce.boolean().optional().describe('Enable degen mode (higher leverage limits)'),
+      degen_mode: zBool.optional().describe('Enable degen mode (higher leverage limits)'),
     },
   }, async (params) => {
     const res = await client.openPosition({

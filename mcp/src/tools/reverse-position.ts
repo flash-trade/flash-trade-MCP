@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
+import { zBool } from '../sanitize.ts'
 import type { ReversePositionResponse } from '../client/types.ts'
 
 function formatReversePreview(res: ReversePositionResponse): string {
@@ -37,7 +38,7 @@ export function registerReversePositionTool(server: McpServer, client: FlashApiC
       position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey to reverse'),
       owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey'),
       slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
-      degen_mode: z.coerce.boolean().optional().describe('Enable degen mode for the new position'),
+      degen_mode: zBool.optional().describe('Enable degen mode for the new position'),
     },
   }, async (params) => {
     const res = await client.reversePosition({

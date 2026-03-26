@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
+import { zBool } from '../sanitize.ts'
 import type { ClosePositionResponse } from '../client/types.ts'
 
 function formatClosePreview(res: ClosePositionResponse): string {
@@ -39,7 +40,7 @@ export function registerClosePositionTool(server: McpServer, client: FlashApiCli
       position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey to close'),
       input_usd: z.string().max(32).describe('USD amount to close, e.g. "500.00" for full or "250.00" for partial'),
       withdraw_token_symbol: z.string().max(16).describe('Token to receive: "USDC", "SOL", etc.'),
-      keep_leverage_same: z.coerce.boolean().optional().describe('Keep leverage constant during partial close'),
+      keep_leverage_same: zBool.optional().describe('Keep leverage constant during partial close'),
       slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
     },
   }, async (params) => {

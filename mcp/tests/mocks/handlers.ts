@@ -11,12 +11,12 @@ export const handlers = [
   // ── Markets ──
   http.get(`${BASE}/markets`, () =>
     HttpResponse.json([
-      { pubkey: 'mkt1', symbol: 'SOL' },
-      { pubkey: 'mkt2', symbol: 'BTC' },
+      { pubkey: 'mkt1', account: { side: 'Long', target_custody: 'cust1', collateral_custody: 'cust2', pool: 'pool1', permissions: { allow_open_position: true, allow_close_position: true } } },
+      { pubkey: 'mkt2', account: { side: 'Short', target_custody: 'cust1', collateral_custody: 'cust2', pool: 'pool1', permissions: { allow_open_position: true, allow_close_position: true } } },
     ]),
   ),
   http.get(`${BASE}/markets/:pubkey`, ({ params }) => {
-    if (params.pubkey === 'mkt1') return HttpResponse.json({ pubkey: 'mkt1', symbol: 'SOL' })
+    if (params.pubkey === 'mkt1') return HttpResponse.json({ pubkey: 'mkt1', account: { side: 'Long', target_custody: 'cust1', collateral_custody: 'cust2', pool: 'pool1', permissions: { allow_open_position: true, allow_close_position: true } } })
     return new HttpResponse(null, { status: 404 })
   }),
 
@@ -73,10 +73,34 @@ export const handlers = [
   http.get(`${BASE}/orders/:pubkey`, ({ params }) =>
     HttpResponse.json({ pubkey: params.pubkey }),
   ),
-  http.get(`${BASE}/orders/owner/:owner`, () => HttpResponse.json([])),
+  http.get(`${BASE}/orders/owner/:owner`, () => HttpResponse.json([
+    {
+      key: 'ord1', orderAccountData: 'base64data',
+      limitOrders: [],
+      takeProfitOrders: [{
+        market: 'mkt1', orderId: 0, sideUi: 'Long', symbol: 'SOL',
+        receiveTokenSymbol: 'USDC', sizeAmountUi: '1.0', sizeAmountUiKmb: '1.0',
+        sizeUsdUi: '148.52', type: 'TP', triggerPriceUi: '160.00', leverage: '5.00',
+      }],
+      stopLossOrders: [{
+        market: 'mkt1', orderId: 1, sideUi: 'Long', symbol: 'SOL',
+        receiveTokenSymbol: 'USDC', sizeAmountUi: '1.0', sizeAmountUiKmb: '1.0',
+        sizeUsdUi: '148.52', type: 'SL', triggerPriceUi: '130.00', leverage: '5.00',
+      }],
+    },
+  ])),
 
   // ── Pool Data ──
-  http.get(`${BASE}/pool-data`, () => HttpResponse.json([{ pool: 'pool1', aum: '1000000' }])),
+  http.get(`${BASE}/pool-data`, () => HttpResponse.json({
+    pools: [{
+      poolName: 'Crypto.1', poolAddress: 'pool1',
+      custodyStats: [
+        { symbol: 'SOL', custodyAccount: 'cust1', maxLeverage: '100.00' },
+        { symbol: 'USDC', custodyAccount: 'cust2', maxLeverage: '1.00' },
+      ],
+      lpStats: { totalPoolValueUsd: '1000000', lpPrice: '1.05', stableCoinPercentage: '45.2' },
+    }],
+  })),
   http.get(`${BASE}/pool-data/:pubkey`, ({ params }) =>
     HttpResponse.json({ pool: params.pubkey, aum: '1000000' }),
   ),
@@ -136,6 +160,20 @@ export const handlers = [
       newCollateralUsd: '98.00', openEntryFee: '0.45',
       transactionBase64: 'AQAAAA==',
     }),
+  ),
+
+  // ── Transaction Builder: Trigger Orders ──
+  http.post(`${BASE}/transaction-builder/place-trigger-order`, () =>
+    HttpResponse.json({ transactionBase64: 'AQAAAA==' }),
+  ),
+  http.post(`${BASE}/transaction-builder/edit-trigger-order`, () =>
+    HttpResponse.json({ transactionBase64: 'AQAAAA==' }),
+  ),
+  http.post(`${BASE}/transaction-builder/cancel-trigger-order`, () =>
+    HttpResponse.json({ transactionBase64: 'AQAAAA==' }),
+  ),
+  http.post(`${BASE}/transaction-builder/cancel-all-trigger-orders`, () =>
+    HttpResponse.json({ transactionBase64: 'AQAAAA==' }),
   ),
 
   // ── Preview: Limit Order Fees ──

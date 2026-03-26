@@ -35,7 +35,8 @@ function formatClosePreview(res: ClosePositionResponse): string {
 export function registerClosePositionTool(server: McpServer, client: FlashApiClient) {
   server.registerTool('close_position', {
     description:
-      'Build a transaction to close (fully or partially) an existing perpetual position. Returns a preview with PnL, fees, and receive amount, plus an unsigned transaction. For a full close, set input_usd to the position\'s full size. For a partial close, use a smaller amount. The transaction must be signed and submitted separately.',
+      'Build a transaction to close (fully or partially) an existing position. Returns preview with PnL, fees, and receive amount, plus unsigned transaction. ' +
+      'For full close: set input_usd to position size. For partial: use smaller amount. Requires position_key from get_positions.',
     inputSchema: {
       position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey to close'),
       input_usd: z.string().max(32).describe('USD amount to close, e.g. "500.00" for full or "250.00" for partial'),

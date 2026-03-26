@@ -8,6 +8,8 @@ import { registerPriceTools } from './prices.ts'
 import { registerPositionTools } from './positions.ts'
 import { registerOrderTools } from './orders.ts'
 import { registerPoolDataTools } from './pool-data.ts'
+import { registerAccountSummaryTool } from './account-summary.ts'
+import { registerTradingOverviewTool } from './trading-overview.ts'
 import { registerOpenPositionTool } from './open-position.ts'
 import { registerClosePositionTool } from './close-position.ts'
 import { registerCollateralTools } from './collateral.ts'
@@ -25,6 +27,8 @@ export function registerReadTools(server: McpServer, client: FlashApiClient) {
   registerPositionTools(server, client)
   registerOrderTools(server, client)
   registerPoolDataTools(server, client)
+  registerAccountSummaryTool(server, client)
+  registerTradingOverviewTool(server, client)
 }
 
 export function registerTransactionTools(server: McpServer, client: FlashApiClient) {

@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
+import { zBool } from '../sanitize.ts'
 
 export function registerTriggerOrderTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('place_trigger_order', {
@@ -11,7 +12,7 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),
       trigger_price: z.string().max(32).describe('Trigger price in UI format, e.g. "160.00"'),
       size_amount: z.string().max(32).describe('Size in target token to close when triggered, e.g. "0.5"'),
-      is_stop_loss: z.coerce.boolean().describe('true = stop-loss, false = take-profit'),
+      is_stop_loss: zBool.describe('true = stop-loss, false = take-profit'),
       owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (must own the position)'),
     },
   }, async (params) => {
@@ -46,7 +47,7 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       order_id: z.coerce.number().describe('Index of the trigger order to edit (0-7)'),
       trigger_price: z.string().max(32).describe('New trigger price in UI format'),
       size_amount: z.string().max(32).describe('New size in target token'),
-      is_stop_loss: z.coerce.boolean().describe('true = stop-loss, false = take-profit'),
+      is_stop_loss: zBool.describe('true = stop-loss, false = take-profit'),
       owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (must be original order owner)'),
     },
   }, async (params) => {
@@ -80,7 +81,7 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
       side: z.enum(['LONG', 'SHORT']).describe('Position side'),
       order_id: z.coerce.number().describe('Index of the trigger order to cancel (0-7)'),
-      is_stop_loss: z.coerce.boolean().describe('true = stop-loss, false = take-profit'),
+      is_stop_loss: zBool.describe('true = stop-loss, false = take-profit'),
       owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (must own the order)'),
     },
   }, async (params) => {

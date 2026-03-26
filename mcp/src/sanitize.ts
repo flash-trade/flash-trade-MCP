@@ -1,3 +1,14 @@
+import { z } from 'zod'
+
+/**
+ * Boolean schema that handles string "true"/"false" from MCP clients.
+ * z.coerce.boolean() is BROKEN for this — Boolean("false") === true in JS.
+ */
+export const zBool = z.preprocess((v) => {
+  if (typeof v === 'string') return v === 'true'
+  return v
+}, z.boolean())
+
 /** Strip anything that looks like key material from error messages */
 export function sanitizeError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e)

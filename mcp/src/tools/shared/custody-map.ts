@@ -72,7 +72,19 @@ export function formatPriceUsd(data: PriceData): string {
   const price = parseFloat(data.price)
   const exp = parseFloat(data.exponent)
   if (isNaN(price) || isNaN(exp)) return '?'
-  return (price * Math.pow(10, exp)).toFixed(2)
+  const usd = price * Math.pow(10, exp)
+  if (usd === 0) return '0.00'
+  if (usd < 0.01) return usd.toPrecision(4)
+  return usd.toFixed(2)
+}
+
+export function formatCompactUsd(valueStr: string | undefined): string {
+  if (!valueStr) return '$?'
+  const num = parseFloat(valueStr)
+  if (isNaN(num)) return `$${valueStr}`
+  if (num >= 1_000_000) return `$${(num / 1_000_000).toFixed(2)}M`
+  if (num >= 1_000) return `$${(num / 1_000).toFixed(1)}K`
+  return `$${num.toFixed(2)}`
 }
 
 export function buildCustodySymbolMap(poolData: PoolDataResponse): Map<string, CustodyInfo> {

@@ -87,6 +87,7 @@ export function registerAccountSummaryTool(server: McpServer, client: FlashApiCl
       for (const w of warnings) lines.push(`  ${w}`)
     }
 
+    lines.push('Note: Data is cached ~15 seconds. Recently closed positions may still appear briefly.')
     return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
   })
 }

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatPriceUsd, buildCustodySymbolMap, type PoolDataResponse } from '../../src/tools/shared/custody-map.ts'
+import { formatPriceUsd, formatCompactUsd, buildCustodySymbolMap, type PoolDataResponse } from '../../src/tools/shared/custody-map.ts'
 import { zBool } from '../../src/sanitize.ts'
 
 describe('formatPriceUsd', () => {
@@ -26,6 +26,42 @@ describe('formatPriceUsd', () => {
   it('returns ? for undefined-like strings', () => {
     expect(formatPriceUsd({ price: 'undefined', exponent: '-8', confidence: '0', timestamp: '' }))
       .toBe('?')
+  })
+
+  it('uses adaptive precision for sub-cent tokens (BONK)', () => {
+    // BONK: price=611, exp=-8 → $0.00000611
+    const result = formatPriceUsd({ price: '611', exponent: '-8', confidence: '0', timestamp: '' })
+    expect(result).not.toBe('0.00')
+    expect(result).toContain('0.000006110')
+  })
+
+  it('uses adaptive precision for small tokens (PUMP)', () => {
+    // PUMP: price=1874, exp=-6 → $0.001874
+    const result = formatPriceUsd({ price: '1874', exponent: '-6', confidence: '0', timestamp: '' })
+    expect(result).not.toBe('0.00')
+    expect(result).toContain('1874')
+  })
+})
+
+describe('formatCompactUsd', () => {
+  it('formats millions', () => {
+    expect(formatCompactUsd('5235353.43')).toBe('$5.24M')
+  })
+
+  it('formats thousands', () => {
+    expect(formatCompactUsd('54472.66')).toBe('$54.5K')
+  })
+
+  it('formats small values', () => {
+    expect(formatCompactUsd('123.45')).toBe('$123.45')
+  })
+
+  it('handles undefined', () => {
+    expect(formatCompactUsd(undefined)).toBe('$?')
+  })
+
+  it('handles NaN', () => {
+    expect(formatCompactUsd('bad')).toBe('$bad')
   })
 })
 

@@ -1,6 +1,6 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
-import { buildCustodySymbolMap, formatPriceUsd, type MarketAccount, type PoolDataResponse } from './shared/custody-map.ts'
+import { buildCustodySymbolMap, formatCompactUsd, formatPriceUsd, type MarketAccount, type PoolDataResponse } from './shared/custody-map.ts'
 import { sanitizeError } from '../sanitize.ts'
 
 export function registerTradingOverviewTool(server: McpServer, client: FlashApiClient) {
@@ -45,7 +45,11 @@ export function registerTradingOverviewTool(server: McpServer, client: FlashApiC
         }
       }).sort((a, b) => a.pool.localeCompare(b.pool) || a.symbol.localeCompare(b.symbol) || a.side.localeCompare(b.side))
 
+      const seen = new Set<string>()
       for (const m of enriched) {
+        const key = `${m.symbol}-${m.side}`
+        if (seen.has(key)) continue
+        seen.add(key)
         let priceStr = '?'
         if (prices) {
           const priceData = prices[m.symbol]
@@ -66,7 +70,7 @@ export function registerTradingOverviewTool(server: McpServer, client: FlashApiC
 
       for (const p of poolData.pools) {
         const name = (p.poolName ?? 'Unknown').padEnd(14)
-        const aum = `$${p.lpStats?.totalPoolValueUsd ?? '?'}`.padEnd(14)
+        const aum = formatCompactUsd(p.lpStats?.totalPoolValueUsd).padEnd(14)
         const lp = `$${p.lpStats?.lpPrice ?? '?'}`.padEnd(9)
         const stable = `${p.lpStats?.stableCoinPercentage ?? '?'}%`
         lines.push(`${name} | ${aum} | ${lp} | ${stable}`)

@@ -1,15 +1,15 @@
-# flash-mcp
+# flash-trade-mcp
 
 MCP server wrapping the Flash Trade REST API for AI agent interaction.
 
-Published to NPM as [`flash-mcp`](https://www.npmjs.com/package/flash-mcp).
+Published to NPM as [`flash-trade-mcp`](https://www.npmjs.com/package/flash-trade-mcp).
 
 ## Build & Dev
 
 ```bash
 bun install          # Install deps
 bun run dev          # Run MCP server (stdio)
-bun run test         # Run tests (26 pass, 9 skip — integration needs live API)
+bun run test         # Run tests (79 pass, 9 skip — integration needs live API)
 bun run build        # Compile to dist/
 bun run typecheck    # Type check
 ```
@@ -121,6 +121,8 @@ SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Optional: RPC for sign_and_
 | `get_orders` | List orders, optionally by owner | `owner?` |
 | `get_order` | Single order by pubkey | `pubkey` |
 | `get_pool_data` | Pool AUM, LP stats, utilization | `pool_pubkey?` |
+| `get_account_summary` | Complete wallet overview (positions + orders + prices) | `owner` |
+| `get_trading_overview` | Trading-ready market snapshot (markets + prices + pool utilization) | none |
 
 ### Preview Tools (calculations, no transactions)
 
@@ -145,10 +147,10 @@ SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Optional: RPC for sign_and_
 
 | Tool | Purpose | Key Params |
 |------|---------|-----------|
-| `place_trigger_order` | Place TP or SL on existing position | `market_symbol`, `collateral_symbol`, `side`, `trigger_price`, `size_amount`, `is_stop_loss`, `owner` |
-| `edit_trigger_order` | Edit existing TP/SL (change price/size) | `market_symbol`, `collateral_symbol`, `side`, `order_id`, `trigger_price`, `size_amount`, `is_stop_loss`, `owner` |
-| `cancel_trigger_order` | Cancel a single TP or SL order | `market_symbol`, `collateral_symbol`, `side`, `order_id`, `is_stop_loss`, `owner` |
-| `cancel_all_trigger_orders` | Cancel all TP/SL for a market+side | `market_symbol`, `collateral_symbol`, `side`, `owner` |
+| `place_trigger_order` | Place TP or SL on existing position | `market_symbol`, `side`, `trigger_price`, `size_amount`, `is_stop_loss`, `owner` |
+| `edit_trigger_order` | Edit existing TP/SL (change price/size) | `market_symbol`, `side`, `order_id`, `trigger_price`, `size_amount`, `is_stop_loss`, `owner` |
+| `cancel_trigger_order` | Cancel a single TP or SL order | `market_symbol`, `side`, `order_id`, `is_stop_loss`, `owner` |
+| `cancel_all_trigger_orders` | Cancel all TP/SL for a market+side | `market_symbol`, `side`, `owner` |
 
 ### Signing Tool
 
@@ -162,23 +164,21 @@ The `sign_and_send` tool reads the keypair from `KEYPAIR_PATH` (default `~/.conf
 
 ```
 1. health_check                          → Verify API is up
-2. get_markets                           → See available markets
-3. get_prices                            → Check current prices
-4. get_positions (owner=<wallet>)        → Check existing positions
-5. open_position (input_amount="12.0")   → Build trade (use $12+ for TP/SL!)
+2. get_trading_overview                  → See all markets with prices + pool utilization
+3. get_account_summary (owner=<wallet>)  → Check existing positions + orders + prices
+4. open_position (input_amount="12.0")   → Build trade (use $12+ for TP/SL!)
    → Show preview to user
    → User approves
-6. sign_and_send (transaction_base64)    → Sign and submit (call immediately!)
-7. get_positions (owner=<wallet>)        → Verify position opened
-8. preview_tp_sl                         → Calculate TP/SL levels
-9. place_trigger_order                   → Add TP/SL to position
+5. sign_and_send (transaction_base64)    → Sign and submit (call immediately!)
+6. get_account_summary (owner=<wallet>)  → Verify position opened
+7. preview_tp_sl                         → Calculate TP/SL levels
+8. place_trigger_order                   → Add TP/SL to position
    → sign_and_send (transaction_base64)  → Sign and submit
-10. get_orders (owner=<wallet>)          → Verify trigger orders placed
-11. edit_trigger_order                    → Adjust TP/SL if needed
-12. close_position                        → When ready to exit
+9. get_orders (owner=<wallet>)           → Verify trigger orders placed
+10. close_position                        → When ready to exit
    → Show preview to user
    → User approves
-13. sign_and_send (transaction_base64)   → Sign and submit
+11. sign_and_send (transaction_base64)   → Sign and submit
 ```
 
 ### Common Gotchas for AI Agents
@@ -190,3 +190,4 @@ The `sign_and_send` tool reads the keypair from `KEYPAIR_PATH` (default `~/.conf
 5. **Slippage**: Default 0.5%. Increase for volatile markets or large positions.
 6. **Degen mode**: Must be explicitly enabled for leverage above normal limits.
 7. **Mainnet prices only**: Devnet will return stale or zero prices from Pyth oracles.
+8. **API cache lag**: Data is cached ~15 seconds. After closing a position, `get_positions` or `get_account_summary` may still show it briefly. This is normal — the transaction is confirmed on-chain.

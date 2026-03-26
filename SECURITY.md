@@ -4,7 +4,7 @@
 
 | Version | Supported |
 |---------|-----------|
-| 0.3.x (mcp) | Yes |
+| 0.4.x (mcp) | Yes |
 | 0.1.x (cli) | Yes |
 
 ## Reporting a Vulnerability

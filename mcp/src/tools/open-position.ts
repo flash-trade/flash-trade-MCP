@@ -55,7 +55,7 @@ export function registerOpenPositionTool(server: McpServer, client: FlashApiClie
       slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
       take_profit: z.string().max(32).optional().describe('TP trigger price in UI format'),
       stop_loss: z.string().max(32).optional().describe('SL trigger price in UI format'),
-      degen_mode: z.boolean().optional().describe('Enable degen mode (higher leverage limits)'),
+      degen_mode: z.coerce.boolean().optional().describe('Enable degen mode (higher leverage limits)'),
     },
   }, async (params) => {
     const res = await client.openPosition({

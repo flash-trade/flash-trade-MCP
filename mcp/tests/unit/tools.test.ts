@@ -306,8 +306,11 @@ describe('get_custodies tool', () => {
 
       expect(text).toContain('custody accounts')
       expect(text).toContain('Symbol')
-      expect(text).toContain('Mint')
+      expect(text).toContain('Pool')
       expect(text).toContain('Pubkey')
+      // Should resolve symbols from pool-data, not show ?
+      expect(text).toContain('USDC')
+      expect(text).toContain('SOL')
       expect(text).toContain('Use get_custody with a pubkey')
       // Should NOT be raw JSON
       expect(text).not.toContain('"pubkey"')

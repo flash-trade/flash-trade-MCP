@@ -44,7 +44,7 @@ describe('FlashApiClient — GET endpoints', () => {
 
   it('getCustodies returns array', async () => {
     const custodies = await client.getCustodies()
-    expect(custodies).toHaveLength(1)
+    expect(custodies).toHaveLength(2)
   })
 
   it('getPositions without owner returns all', async () => {

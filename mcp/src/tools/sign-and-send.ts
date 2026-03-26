@@ -93,9 +93,13 @@ export function registerSignAndSendTool(server: McpServer) {
     } catch (e) {
       const msg = sanitizeError(e)
       const isBlockhashExpired = msg.includes('Blockhash not found') || msg.includes('block height exceeded')
-      const hint = isBlockhashExpired
-        ? '\n\nThe blockhash has expired (~60 seconds). Re-call the original transaction tool to get a fresh transaction, then call sign_and_send immediately.'
-        : ''
+      const isSignerMismatch = msg.includes('Cannot sign with non signer key')
+      let hint = ''
+      if (isBlockhashExpired) {
+        hint = '\n\nThe blockhash has expired (~60 seconds). Re-call the original transaction tool to get a fresh transaction, then call sign_and_send immediately.'
+      } else if (isSignerMismatch) {
+        hint = '\n\nThe transaction was built for a different wallet than the local keypair. Re-call the transaction tool to get a fresh transaction, then sign immediately — blockhashes expire in ~60 seconds.'
+      }
       return {
         content: [{ type: 'text' as const, text: `Transaction send failed: ${msg}${hint}` }],
         isError: true,

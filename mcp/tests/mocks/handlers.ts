@@ -28,9 +28,12 @@ export const handlers = [
   }),
 
   // ── Custodies ──
-  http.get(`${BASE}/custodies`, () => HttpResponse.json([{ pubkey: 'cust1', symbol: 'USDC' }])),
+  http.get(`${BASE}/custodies`, () => HttpResponse.json([
+    { pubkey: 'cust1', account: { mint: { key: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' } } },
+    { pubkey: 'cust2', account: { mint: { key: 'So11111111111111111111111111111111111111112' } } },
+  ])),
   http.get(`${BASE}/custodies/:pubkey`, ({ params }) => {
-    if (params.pubkey === 'cust1') return HttpResponse.json({ pubkey: 'cust1', symbol: 'USDC' })
+    if (params.pubkey === 'cust1') return HttpResponse.json({ pubkey: 'cust1', account: { mint: { key: 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v' } } })
     return new HttpResponse(null, { status: 404 })
   }),
 

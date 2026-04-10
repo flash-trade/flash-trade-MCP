@@ -94,8 +94,14 @@ impl WalletManager {
     }
 
     pub fn import_solana_default(name: &str) -> Result<()> {
-        let solana_path = dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("~/.config"))
+        // The Solana CLI always stores its default keypair at $HOME/.config/solana/id.json,
+        // regardless of the host OS's config conventions. We deliberately do NOT use
+        // `dirs::config_dir()` here because on macOS that returns
+        // `~/Library/Application Support/`, which is NOT where solana-keygen writes.
+        let home = std::env::var("HOME")
+            .with_context(|| "HOME environment variable is not set — cannot locate Solana CLI default keypair")?;
+        let solana_path = PathBuf::from(home)
+            .join(".config")
             .join("solana")
             .join("id.json");
         Self::import_file(name, &solana_path)

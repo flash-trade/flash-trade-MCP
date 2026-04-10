@@ -23,7 +23,7 @@ pub async fn list_orders(
 ) -> Result<()> {
     let owner = resolve_owner(address, key_override, settings)?;
     let rpc = RpcManager::new(settings)?;
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
 
     let program_id = resolve_program_id(&settings.cluster);
     let accounts = rpc.get_program_accounts_by_owner(&program_id, &owner, &ORDER_DISCRIMINATOR)?;

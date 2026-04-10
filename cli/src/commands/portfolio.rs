@@ -31,7 +31,7 @@ pub async fn show_portfolio(
 
     let sol_balance = rpc.get_sol_balance(&owner)? as f64 / 1_000_000_000.0;
 
-    let _configs = PoolConfigManager::load(&settings.cluster)?;
+    let _configs = PoolConfigManager::load(settings)?;
     let _price_client = PriceClient::new();
     let program_id = crate::commands::positions::resolve_program_id_pub(&settings.cluster);
 

@@ -14,7 +14,7 @@ pub struct PoolSummary {
 }
 
 pub async fn list_pools(settings: &Settings, formatter: &Formatter) -> Result<()> {
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
 
     let summaries: Vec<PoolSummary> = configs
         .iter()
@@ -33,7 +33,7 @@ pub async fn list_pools(settings: &Settings, formatter: &Formatter) -> Result<()
 }
 
 pub async fn show_pool(name: &str, settings: &Settings, formatter: &Formatter) -> Result<()> {
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
     let pool = PoolConfigManager::find_pool(&configs, name)?;
 
     let summary = PoolSummary {

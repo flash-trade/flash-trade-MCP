@@ -33,7 +33,7 @@ pub async fn list_positions(
 ) -> Result<()> {
     let owner = resolve_owner(address, key_override, settings)?;
     let rpc = RpcManager::new(settings)?;
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
     let price_client = PriceClient::new();
 
     let program_id = resolve_program_id_pub(&settings.cluster);
@@ -75,7 +75,7 @@ pub async fn show_position(
     let pubkey =
         Pubkey::from_str(pubkey_str).with_context(|| format!("Invalid pubkey: {pubkey_str}"))?;
     let rpc = RpcManager::new(settings)?;
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
     let price_client = PriceClient::new();
 
     let account = rpc.get_account(&pubkey)?;

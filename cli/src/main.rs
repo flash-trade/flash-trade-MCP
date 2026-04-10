@@ -16,7 +16,17 @@ use output::formatter::Formatter;
 #[tokio::main]
 async fn main() -> Result<()> {
     let app = App::parse();
-    let settings = Config::load().unwrap_or_default();
+    let settings = match Config::load() {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "WARNING: Failed to load settings: {e}\n\
+                 Using defaults (public Solana RPC, no custom config).\n\
+                 Run `flash config list` to check your configuration."
+            );
+            Settings::default()
+        }
+    };
 
     let formatter = Formatter::new(app.format);
 
@@ -259,9 +269,12 @@ async fn handle_orders(
             )
             .await
         }
-        cli::OrdersCommand::Cancel { order } => {
-            commands::cancel_trigger_order::cancel_single(&order, key_override, settings, formatter)
-                .await
+        cli::OrdersCommand::Cancel { order, r#type } => {
+            let is_stop_loss = matches!(r#type, cli::orders::TriggerType::Sl);
+            commands::cancel_trigger_order::cancel_single(
+                &order, is_stop_loss, key_override, settings, formatter,
+            )
+            .await
         }
         cli::OrdersCommand::CancelAll { symbol } => {
             commands::cancel_trigger_order::cancel_all(&symbol, key_override, settings, formatter)
@@ -337,14 +350,24 @@ async fn handle_earn(
 async fn handle_config(command: cli::ConfigCommand, formatter: &Formatter) -> Result<()> {
     match command {
         cli::ConfigCommand::List => {
+            use crate::core::config::redact_url;
             let settings = Config::load()?;
+            let fallbacks_display = if settings.rpc_fallbacks.is_empty() {
+                "(none)".to_string()
+            } else {
+                settings.rpc_fallbacks.iter().map(|u| redact_url(u)).collect::<Vec<_>>().join(", ")
+            };
             let pairs = vec![
                 ("active_key".to_string(), settings.active_key),
                 ("output_format".to_string(), settings.output_format),
                 ("cluster".to_string(), settings.cluster),
                 (
                     "rpc_url".to_string(),
-                    settings.rpc_url.unwrap_or_else(|| "(default)".to_string()),
+                    settings
+                        .rpc_url
+                        .as_deref()
+                        .map(redact_url)
+                        .unwrap_or_else(|| "(default)".to_string()),
                 ),
                 (
                     "default_slippage_bps".to_string(),
@@ -355,12 +378,25 @@ async fn handle_config(command: cli::ConfigCommand, formatter: &Formatter) -> Re
                     "priority_fee".to_string(),
                     settings.priority_fee.to_string(),
                 ),
+                (
+                    "rpc_failover".to_string(),
+                    if settings.rpc_failover { "on" } else { "off" }.to_string(),
+                ),
+                ("rpc_fallbacks".to_string(), fallbacks_display),
             ];
             println!("{}", formatter.settings(&pairs));
         }
         cli::ConfigCommand::Set { key, value } => {
             Config::set(&key, &value)?;
-            println!("{}", formatter.success(&format!("Set {key} = {value}")));
+            // Redact API keys in URLs when echoing back to the user
+            let display_value = match key.as_str() {
+                "rpc_url" | "rpc_fallbacks" | "pool_config_url" => {
+                    use crate::core::config::redact_url;
+                    redact_url(&value)
+                }
+                _ => value,
+            };
+            println!("{}", formatter.success(&format!("Set {key} = {display_value}")));
         }
         cli::ConfigCommand::Reset => {
             Config::reset()?;
@@ -459,7 +495,7 @@ async fn handle_price(
     settings: &Settings,
     formatter: &Formatter,
 ) -> Result<()> {
-    let configs = core::pool_config::PoolConfigManager::load(&settings.cluster)?;
+    let configs = core::pool_config::PoolConfigManager::load(settings)?;
     let token = core::pool_config::PoolConfigManager::find_token(&configs, symbol)?;
 
     if settings.cluster == "devnet" {

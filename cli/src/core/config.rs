@@ -3,6 +3,16 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
+/// Redact query parameters from URLs to avoid leaking API keys in output.
+/// `https://rpc.example.com/?api-key=SECRET` → `https://rpc.example.com/?***`
+pub fn redact_url(url: &str) -> String {
+    if let Some(idx) = url.find('?') {
+        format!("{}?***", &url[..idx])
+    } else {
+        url.to_string()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Settings {
     pub active_key: String,
@@ -12,6 +22,19 @@ pub struct Settings {
     pub default_slippage_bps: u16,
     pub commitment: String,
     pub priority_fee: u64,
+    /// When true, failed RPC calls rotate through fallback endpoints before giving up.
+    #[serde(default = "default_true")]
+    pub rpc_failover: bool,
+    /// Additional RPC URLs to try when the primary fails (tried in order).
+    #[serde(default)]
+    pub rpc_fallbacks: Vec<String>,
+    /// URL to fetch fresh pool configs from (falls back to bundled JSON on failure).
+    #[serde(default)]
+    pub pool_config_url: Option<String>,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 impl Default for Settings {
@@ -24,6 +47,9 @@ impl Default for Settings {
             default_slippage_bps: 100,
             commitment: "confirmed".to_string(),
             priority_fee: 100_000,
+            rpc_failover: true,
+            rpc_fallbacks: Vec::new(),
+            pool_config_url: None,
         }
     }
 }
@@ -33,7 +59,13 @@ pub struct Config;
 impl Config {
     pub fn config_dir() -> PathBuf {
         dirs::config_dir()
-            .unwrap_or_else(|| PathBuf::from("~/.config"))
+            .unwrap_or_else(|| {
+                // Returning a literal "~/.config" would fail to exist(); expand $HOME.
+                std::env::var("HOME")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| PathBuf::from("."))
+                    .join(".config")
+            })
             .join("flash")
     }
 
@@ -64,8 +96,17 @@ impl Config {
             fs::set_permissions(&keys_dir, fs::Permissions::from_mode(0o700))?;
         }
 
-        if !Self::settings_path().exists() {
+        let settings_path = Self::settings_path();
+        if !settings_path.exists() {
             Self::save(&Settings::default())?;
+        } else {
+            // Tighten permissions on pre-existing settings.json that may have been
+            // created by an older version before the 0o600 logic was added.
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = fs::set_permissions(&settings_path, fs::Permissions::from_mode(0o600));
+            }
         }
 
         Ok(())
@@ -92,6 +133,16 @@ impl Config {
         let data = serde_json::to_string_pretty(settings)?;
         fs::write(&path, data)
             .with_context(|| format!("Failed to write settings: {}", path.display()))?;
+
+        // settings.json can contain an RPC URL with an embedded API key, so tighten
+        // permissions to owner-only read/write (matches the 0o600 we set on keypair files).
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&path, fs::Permissions::from_mode(0o600))
+                .with_context(|| format!("Failed to set permissions on settings: {}", path.display()))?;
+        }
+
         Ok(())
     }
 
@@ -127,8 +178,36 @@ impl Config {
                 settings.priority_fee = value.parse()
                     .with_context(|| format!("Invalid priority_fee: '{value}'. Must be a number (microlamports)"))?;
             }
+            "rpc_failover" => {
+                settings.rpc_failover = match value {
+                    "on" | "true" | "yes" | "1" => true,
+                    "off" | "false" | "no" | "0" => false,
+                    _ => anyhow::bail!("Invalid rpc_failover: '{value}'. Must be on/off, true/false, yes/no"),
+                };
+            }
+            "rpc_fallbacks" => {
+                settings.rpc_fallbacks = if value.is_empty() {
+                    Vec::new()
+                } else {
+                    value.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
+                };
+            }
+            "pool_config_url" => {
+                settings.pool_config_url = if value.is_empty() || value == "none" {
+                    None
+                } else if !value.starts_with("https://") {
+                    anyhow::bail!(
+                        "pool_config_url must use HTTPS to prevent man-in-the-middle attacks \
+                         on pool config data. Got: '{}'",
+                        redact_url(value)
+                    )
+                } else {
+                    Some(value.to_string())
+                };
+            }
             _ => anyhow::bail!(
-                "Unknown setting: '{key}'. Valid keys: active_key, output_format, cluster, rpc_url, default_slippage_bps, commitment, priority_fee"
+                "Unknown setting: '{key}'. Valid keys: active_key, output_format, cluster, rpc_url, \
+                 default_slippage_bps, commitment, priority_fee, rpc_failover, rpc_fallbacks, pool_config_url"
             ),
         }
         Self::save(&settings)?;

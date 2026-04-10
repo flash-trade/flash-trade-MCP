@@ -50,7 +50,11 @@ coverage/
 .cache
 .eslintcache
 
-# CLI user config (generated at runtime in ~/.config/flash/)
+# CLI user config (generated at runtime in the platform config dir:
+#   macOS   ~/Library/Application Support/flash/
+#   Linux   ~/.config/flash/
+#   Windows %APPDATA%\flash\
+# These patterns also ignore any stray copies accidentally left in the repo.)
 settings.json
 history.jsonl
 keys/

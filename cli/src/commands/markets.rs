@@ -9,7 +9,7 @@ pub async fn list_markets(
     settings: &Settings,
     formatter: &Formatter,
 ) -> Result<()> {
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
     let mut markets = PoolConfigManager::list_markets(&configs);
 
     if let Some(pool_name) = pool_filter {
@@ -25,7 +25,7 @@ pub async fn list_markets(
 }
 
 pub async fn show_market(symbol: &str, settings: &Settings, formatter: &Formatter) -> Result<()> {
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
     let markets = PoolConfigManager::list_markets(&configs);
     let matching: Vec<_> = markets
         .into_iter()

@@ -43,15 +43,16 @@ impl TxEngine {
         let instructions =
             Self::prepare_instructions(instruction_result, compute_units, priority_fee);
 
-        // Fetch ALTs (cached per pool, so this is fast after first call)
+        // Fetch ALTs — hard fail if any are missing. Building a transaction without
+        // its expected ALTs could resolve wrong accounts, risking user funds.
         let mut alt_accounts = Vec::new();
         for alt_pk in alt_pubkeys {
-            match rpc.get_address_lookup_table(alt_pk) {
-                Ok(alt) => alt_accounts.push(alt),
-                Err(e) => {
-                    eprintln!("Warning: Failed to fetch ALT {alt_pk}: {e}");
-                }
-            }
+            let alt = rpc.get_address_lookup_table(alt_pk)
+                .with_context(|| format!(
+                    "Failed to fetch Address Lookup Table {alt_pk}. \
+                     Cannot safely build transaction without it — aborting."
+                ))?;
+            alt_accounts.push(alt);
         }
 
         // Get fresh blockhash right before compiling + signing

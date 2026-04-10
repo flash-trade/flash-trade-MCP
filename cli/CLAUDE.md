@@ -35,8 +35,12 @@ cargo clippy                   # Lint
 ## Conventions
 
 - All amounts are human-readable (USD or token units) at the CLI boundary, converted to native (u64) internally
-- Wallet keypairs stored at `~/.config/flash/keys/<name>.json` with 0o600 permissions
-- Config at `~/.config/flash/settings.json`
+- Wallet keypairs and config live under the platform-specific config dir resolved via `dirs::config_dir()`:
+  - macOS: `~/Library/Application Support/flash/`
+  - Linux: `~/.config/flash/` (or `$XDG_CONFIG_HOME/flash/`)
+  - Windows: `%APPDATA%\flash\`
+- Keypairs at `<config_dir>/keys/<name>.json` with `0o600` permissions (dir `0o700`)
+- Settings at `<config_dir>/settings.json` with `0o600` permissions (may contain RPC API keys)
 - Default collateral token: USDC
 - Default slippage: 100 bps (1%)
 

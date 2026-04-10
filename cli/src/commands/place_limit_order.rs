@@ -26,7 +26,7 @@ pub async fn execute(
     let keypair = WalletManager::resolve(key_override, settings)?;
     let owner = solana_sdk::signer::Signer::pubkey(&keypair);
     let rpc = RpcManager::new(settings)?;
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
     let price_client = PriceClient::new();
     let sdk_side = cli_side_to_sdk(side);
 

@@ -123,7 +123,15 @@ Settings: `cluster`, `output_format`, `rpc_url`, `default_slippage_bps`, `priori
 
 ## Configuration
 
-Config is stored at `~/.config/flash/settings.json`. Keypairs at `~/.config/flash/keys/<name>.json` with `0o600` permissions.
+Config and keypairs live under a platform-specific directory:
+
+| Platform | Config dir |
+|----------|-----------|
+| macOS    | `~/Library/Application Support/flash/` |
+| Linux    | `~/.config/flash/` (or `$XDG_CONFIG_HOME/flash/`) |
+| Windows  | `%APPDATA%\flash\` |
+
+Settings are in `settings.json`; keypairs are in `keys/<name>.json` with `0o600` permissions (directory `0o700`). The actual location is resolved via the [`dirs`](https://docs.rs/dirs/5/dirs/fn.config_dir.html) crate at runtime.
 
 ## Security Considerations
 
@@ -131,7 +139,7 @@ This CLI handles Solana private keys locally. Understand these risks before usin
 
 ### Key Storage
 
-Keypairs are stored as **unencrypted JSON** at `~/.config/flash/keys/<name>.json`, protected by Unix file permissions (`0o600`). This follows the same pattern as the Solana CLI (`~/.config/solana/id.json`).
+Keypairs are stored as **unencrypted JSON** in the platform config dir (see [Configuration](#configuration) above), protected by Unix file permissions (`0o600`). This follows the same pattern as the Solana CLI (`~/.config/solana/id.json`).
 
 **Risks:**
 - If file permissions are changed (e.g., by a backup tool, `chmod`, or file copy), keys become readable by other users on shared systems
@@ -140,7 +148,10 @@ Keypairs are stored as **unencrypted JSON** at `~/.config/flash/keys/<name>.json
 
 **Recommendations:**
 - Use a dedicated keypair with limited funds for trading — do not import your main wallet
-- Verify permissions: `ls -la ~/.config/flash/keys/` should show `-rw-------`
+- Verify permissions on the keys directory (path is platform-specific — see [Configuration](#configuration)):
+  - macOS: `ls -la "$HOME/Library/Application Support/flash/keys/"`
+  - Linux: `ls -la ~/.config/flash/keys/`
+  - Both should show `-rw-------` on each key file
 - On shared machines, consider full-disk encryption
 - For large amounts, use a hardware wallet with the Flash Trade web UI instead
 
@@ -166,12 +177,12 @@ The CLI sends signed transactions to the configured RPC endpoint. A compromised 
 
 **Recommendations:**
 - Use a trusted RPC provider (Helius, Triton, QuickNode)
-- If your RPC URL contains an API key, be aware it is stored in `~/.config/flash/settings.json`
+- If your RPC URL contains an API key, be aware it is stored in `settings.json` under the platform config dir (see [Configuration](#configuration)). The file is written with `0o600` permissions, but setting it via `flash config set rpc_url <url>` still lands the URL (with the key) in your shell history — consider `history -c` afterward.
 - Avoid setting RPC URLs from untrusted sources
 
 ### Config File
 
-Settings at `~/.config/flash/settings.json` store your active key name, RPC URL, cluster, and preferences. This file may contain RPC API keys embedded in URLs.
+`settings.json` (in the platform config dir — see [Configuration](#configuration)) stores your active key name, RPC URL, cluster, and preferences. This file may contain RPC API keys embedded in URLs and is written with `0o600` permissions.
 
 ### What the CLI Does Right
 

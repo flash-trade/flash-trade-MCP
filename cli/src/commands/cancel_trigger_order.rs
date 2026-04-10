@@ -12,6 +12,7 @@ use crate::output::formatter::Formatter;
 /// Cancel a single order by pubkey.
 pub async fn cancel_single(
     order_str: &str,
+    is_stop_loss: bool,
     key_override: Option<&str>,
     settings: &Settings,
     formatter: &Formatter,
@@ -20,7 +21,7 @@ pub async fn cancel_single(
     let keypair = WalletManager::resolve(key_override, settings)?;
     let owner = solana_sdk::signer::Signer::pubkey(&keypair);
     let rpc = RpcManager::new(settings)?;
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
 
     let account = rpc.get_account(&order_pk)?;
     let (target_sym, collateral_sym, side, _) = position_market_from_data(&account.data, &configs)?;
@@ -32,22 +33,21 @@ pub async fn cancel_single(
     let prog_id = program_id(&settings.cluster);
     let client = PerpetualsClient::new(prog_id, false);
 
-    // Cancel as TP first (order_id=0), then SL — we cancel whichever exists
-    // The actual order type is determined by the on-chain state
+    let order_type_str = if is_stop_loss { "SL" } else { "TP" };
     let ix_result = client.cancel_trigger_order(
         &owner,
         &target_sym,
         &collateral_sym,
         side,
-        0,     // order_id
-        false, // is_stop_loss = false (try TP first)
+        0,
+        is_stop_loss,
         pool_config,
     )?;
 
     print_preview(&[
         (
             "Operation",
-            format!("Cancel Order: {target_sym}/{collateral_sym}"),
+            format!("Cancel {order_type_str}: {target_sym}/{collateral_sym}"),
         ),
         ("Order", order_str.to_string()),
     ]);
@@ -85,7 +85,7 @@ pub async fn cancel_all(
     let keypair = WalletManager::resolve(key_override, settings)?;
     let owner = solana_sdk::signer::Signer::pubkey(&keypair);
     let rpc = RpcManager::new(settings)?;
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
 
     // Find market — try both sides
     let market_match =

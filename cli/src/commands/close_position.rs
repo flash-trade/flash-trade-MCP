@@ -20,11 +20,24 @@ pub async fn execute(
     settings: &Settings,
     formatter: &Formatter,
 ) -> Result<()> {
+    // The SDK's close_position always closes the entire position — it takes no size
+    // delta or percent argument. Accepting `--percent` < 100 here and quietly closing
+    // 100% would make users think they closed a fraction when they actually flattened
+    // the whole position. Reject and point them at the right command instead.
+    if percent != 100 {
+        anyhow::bail!(
+            "Partial close via `--percent` is not supported on `flash perps close`.\n\
+             To close part of a position, use:\n  \
+             flash perps decrease <position> <usd_amount>\n\
+             where <usd_amount> is the USD size to remove (e.g. `50` trims $50 of size)."
+        );
+    }
+
     let position_pk = parse_pubkey(position_str)?;
     let keypair = WalletManager::resolve(key_override, settings)?;
     let owner = solana_sdk::signer::Signer::pubkey(&keypair);
     let rpc = RpcManager::new(settings)?;
-    let configs = PoolConfigManager::load(&settings.cluster)?;
+    let configs = PoolConfigManager::load(settings)?;
     let price_client = PriceClient::new();
     let slippage_bps = resolve_slippage(slippage, settings);
 

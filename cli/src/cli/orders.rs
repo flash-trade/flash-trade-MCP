@@ -83,6 +83,10 @@ pub enum OrdersCommand {
     Cancel {
         /// Order account pubkey
         order: String,
+
+        /// Order type (tp or sl)
+        #[arg(long)]
+        r#type: TriggerType,
     },
 
     /// Cancel all orders for a market

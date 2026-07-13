@@ -1,193 +1,60 @@
-# flash-trade-mcp
+# flash-trade-mcp — CLAUDE.md
 
-MCP server wrapping the Flash Trade REST API for AI agent interaction.
-
-Published to NPM as [`flash-trade-mcp`](https://www.npmjs.com/package/flash-trade-mcp).
+MCP server wrapping the Flash Trade **V2** (MagicBlock Ephemeral Rollup) REST API for AI-agent interaction. Published to npm as [`flash-trade-mcp`](https://www.npmjs.com/package/flash-trade-mcp).
 
 ## Build & Dev
 
 ```bash
-bun install          # Install deps
-bun run dev          # Run MCP server (stdio)
-bun run test         # Run tests (79 pass, 9 skip — integration needs live API)
-bun run build        # Compile to dist/
-bun run typecheck    # Type check
+bun install
+bun run dev          # run MCP server (stdio)
+bun run test         # vitest (MSW-mocked); RUN_INTEGRATION=1 adds live read-only + protocol tests
+bun run typecheck    # tsc --noEmit  ← the type gate
+bun run build        # bundle to dist/
 ```
 
-## CI & Releases
-
-- **CI** (`.github/workflows/ci.yml`): Runs on PRs to `main` when `mcp/**` changes — typecheck, unit tests, build
-- **Publish** (`.github/workflows/publish.yml`): Triggers on `v*` tags — builds and publishes to NPM via OIDC trusted publishing
-- Direct pushes to `main` are blocked — all changes require a PR with passing CI
+CI runs typecheck + unit tests + build on PRs touching `mcp/**`. Publish triggers on a `v*` tag (OIDC trusted publishing). Direct pushes to `main` are blocked — changes go through a PR.
 
 ## Architecture
 
-- `src/index.ts` — Server entry, registers all tools and resources
-- `src/config.ts` — Loads FLASH_API_URL, FLASH_API_TIMEOUT, WALLET_PUBKEY from env; KEYPAIR_PATH + SOLANA_RPC_URL used by sign_and_send
-- `src/client/` — Typed HTTP client for Flash Trade REST API
-- `src/tools/` — MCP tool definitions (one file per tool or tool group)
-- `src/resources/` — MCP resource definitions
-- `tests/mocks/` — MSW handlers for unit tests
+- `src/index.ts` — entry; registers all tools + resources over stdio
+- `src/config.ts` — resolves the network from env (apiBaseUrl + erRpcUrl + baseRpcUrl + keypairPath); all have working defaults
+- `src/client/network.ts` — **`TX_CHAIN`**: the two-chain routing table (endpoint → er|base). Single source of truth; asserted by tests
+- `src/client/errors.ts` — `FlashApiError` normalizing the four error channels + `assertNoErr`
+- `src/client/types.ts` — V2 request/response types (faithful to the LIVE backend)
+- `src/client/flash-api.ts` — thin typed client (35 REST methods); never signs or submits
+- `src/tools/*.ts` — one file per tool group; `shared/format.ts` (mark-price PnL), `shared/tx.ts` (chain-routing footer), `shared/custody-map.ts`
+- `src/tools/sign-and-send.ts` — the ONLY tool that signs + submits; routes by the required `network` arg
 
-## Key Patterns
+## Key patterns
 
-- All tools use Zod schemas for input validation
-- HTTP client returns typed responses; errors mapped to MCP error codes
-- Transaction tools return base64 unsigned transactions; `sign_and_send` tool signs + submits using local keypair
-- Tool descriptions written for AI agent comprehension
-- Bun runtime — auto-loads .env, native TypeScript
+- Tools use Zod raw-shape `inputSchema` (SDK 1.x). `zBool` handles string "true"/"false" (`z.coerce.boolean` is broken — `Boolean("false") === true`).
+- Every transaction tool returns a preview + the unsigned base64 + a footer stating which `network` to pass to `sign_and_send`.
+- `sanitizeError` strips anything key-shaped from error text.
+- Response types are structural — the backend adds fields over time; extra fields are ignored, never rejected.
 
-## Environment Variables
+## V2 domain knowledge (read before building transactions)
 
-```bash
-FLASH_API_URL=https://flashapi.trade  # Required: Flash Trade API base URL
-FLASH_API_TIMEOUT=30000                            # Optional: HTTP timeout in ms
-WALLET_PUBKEY=<solana-pubkey>                      # Optional: default wallet for tx building
-KEYPAIR_PATH=~/.config/solana/id.json              # Optional: keypair for sign_and_send (default shown)
-SOLANA_RPC_URL=https://api.mainnet-beta.solana.com # Optional: RPC for sign_and_send (default shown)
-```
+### Two chains — the top failure mode
+Trading txs (`open/close/reverse/collateral/triggers/limits/tp-sl`) submit to the **Ephemeral Rollup** (`ER_RPC_URL`). Setup (`init_basket/init_deposit_ledger/delegate_basket/deposit_direct`) and withdrawal (`request/execute_withdrawal`) submit to the **base chain** (`SOLANA_RPC_URL`). The routing table is `TX_CHAIN`; every tool's output tells the caller the exact `network` value. Submitting to the wrong chain fails to land.
 
----
+### Partially-signed transactions
+The API returns transactions with its signer slots pre-filled and the blockhash chosen for the target chain. `sign_and_send` adds only the local keypair's signature and NEVER replaces the blockhash (that would invalidate the server's signatures). Blockhashes expire in ~60s — sign promptly.
 
-## AI Agent Domain Knowledge
+### Account lifecycle (one-time, in order — the program enforces it)
+`init_basket → init_deposit_ledger → delegate_basket → deposit_direct`, then trade. Detect "not set up" via `get_owner` (`basketPubkey == null`). Funds move only on explicit user approval — never bundle a deposit into setup.
 
-**This section is critical for any AI agent using these MCP tools.** Read this before building transactions.
+### Mint vs symbol
+`deposit_direct`, `request_withdrawal`, `execute_withdrawal` take a token **MINT** (resolve via `get_tokens`, which flags `isToken2022`). Every trading tool takes a **symbol**. Unknown mints silently assume 6 decimals — wrong for Token-2022.
 
-### Collateral & Fee Rules (IMPORTANT)
+### Four error channels
+`body-err` (HTTP 200 with a non-null `err` — trading/preview), `http-400` (plain text — trigger/limit price validation), `http-422` (plain text — request schema/missing field), `http-500` (empty — setup/withdrawal, reason server-side only). `execute_withdrawal` failing with `0xbc4 / AccountNotInitialized(settlement_receipt)` is a ~30–90s TIMING state, not a failure — retry.
 
-- **Minimum collateral >$10 AFTER fees**: Limit orders, take-profit (TP), and stop-loss (SL) all require more than $10 in remaining collateral after entry fees are deducted. If you open a $10 position, fees reduce the collateral below $10, and you CANNOT place TP/SL/limit orders on that position.
-- **Always use at least $11 for positions needing TP/SL/limit orders.** This accounts for the ~0.06-0.1% entry fee. For safety, $12+ is recommended.
-- Entry fee is shown in `open_position` response as `entryFee` and `openPositionFeePercent`.
-- Exit fee is shown in `close_position` response as `fees`.
-- Hourly borrow rate applies to leveraged positions (shown as `marginFeePercentage` in open_position response).
+### Derived values
+Position PnL/leverage/liquidation are computed from the live mark price (`shared/format.ts` → `computePositionView`), because the indexer values exits through `tradeSpread` and degenerate near liquidation. `youRecieveUsdUi` is misspelled in the API on purpose — mirrored verbatim.
 
-### Transaction Flow
+### Collateral & fees
+Limit/TP/SL require >$10 collateral AFTER entry fees — open with ≥$11. `open_position` warns when a bundled TP/SL would drop below the line. `reverse_position` applies a fixed 2% haircut to close proceeds.
 
-1. Call a transaction tool (`open_position`, `close_position`, `add_collateral`, `remove_collateral`, `reverse_position`)
-2. Tool returns a preview (fees, prices, leverage, liquidation) AND a `transactionBase64` string
-3. **Always show the preview to the user before they sign**
-4. Once the user approves, call `sign_and_send` with the `transactionBase64` to sign and submit
-5. `sign_and_send` reads the local Solana keypair, signs the transaction, submits it, and returns the confirmed signature
-6. If the user prefers manual signing, they can sign the base64 transaction with their own wallet instead of using `sign_and_send`
+## Config / endpoints
 
-**CRITICAL: Blockhash expiry** — Solana blockhashes expire in ~60 seconds. Call `sign_and_send` promptly after receiving the `transactionBase64`. If the blockhash expires, re-call the transaction tool to get a fresh transaction and immediately call `sign_and_send`.
-
-### Order Types
-
-| Type | Description | Collateral Requirement |
-|------|-------------|----------------------|
-| **Market** | Executes immediately at oracle price + slippage | Any amount |
-| **Limit** | Executes when price hits target | >$10 after fees |
-| **Take-Profit (TP)** | Closes position at profit target | >$10 after fees |
-| **Stop-Loss (SL)** | Closes position to limit loss | >$10 after fees |
-
-- Up to 5 trigger orders (TP/SL) per position, each can close a different % of the position
-- TP and SL can be set at open time via `take_profit`/`stop_loss` params on `open_position`
-- TP/SL can also be added, edited, or canceled on existing positions via trigger order tools
-- Use `preview_tp_sl` tool to calculate TP/SL prices and projected PnL before placing
-
-### Position Mechanics
-
-- **SOL positions use JitoSOL** as underlying collateral on-chain
-- **Long markets use the target token as collateral** (ETH/ETH, SOL/SOL). When user pays with USDC, an automatic swap occurs.
-- Leverage is a multiplier on collateral: $10 collateral at 5x = $50 position size
-- Liquidation price moves closer to current price as leverage increases
-
-### Protocol Constraints
-
-- No swap features (Flash Trade not whitelisted for Jupiter swaps)
-- Pyth prices are mainnet only (devnet returns stale/zero)
-- Amounts are in UI format (human-readable, e.g. "100.0") not native format
-
----
-
-## MCP Tool Catalog
-
-### Read Tools (no transactions)
-
-| Tool | Purpose | Key Params |
-|------|---------|-----------|
-| `health_check` | Verify API connectivity | none |
-| `get_markets` | List all perp markets (SOL, BTC, ETH, etc.) | none |
-| `get_market` | Market details by pubkey | `pubkey` |
-| `get_pools` | List liquidity pools | none |
-| `get_pool` | Pool details by pubkey | `pubkey` |
-| `get_custodies` | List custody accounts (token holdings) | none |
-| `get_custody` | Custody details by pubkey | `pubkey` |
-| `get_prices` | All current oracle prices | none |
-| `get_price` | Price for one symbol (e.g. "SOL") | `symbol` |
-| `get_positions` | List positions, optionally by owner | `owner?` |
-| `get_position` | Single position by pubkey | `pubkey` |
-| `get_orders` | List orders, optionally by owner | `owner?` |
-| `get_order` | Single order by pubkey | `pubkey` |
-| `get_pool_data` | Pool AUM, LP stats, utilization | `pool_pubkey?` |
-| `get_account_summary` | Complete wallet overview (positions + orders + prices) | `owner` |
-| `get_trading_overview` | Trading-ready market snapshot (markets + prices + pool utilization) | none |
-
-### Preview Tools (calculations, no transactions)
-
-| Tool | Purpose | Key Params |
-|------|---------|-----------|
-| `preview_limit_order_fees` | Estimate fees before placing limit order | `market_symbol`, `input_amount`, `output_amount`, `side` |
-| `preview_exit_fee` | Estimate close cost | `position_key`, `close_amount_usd` |
-| `preview_tp_sl` | Calculate TP/SL prices and projected PnL | `mode` (forward/reverse_pnl/reverse_roi), position params |
-| `preview_margin` | Preview add/remove collateral effect | `position_key`, `margin_delta_usd`, `action` |
-
-### Transaction Tools (return unsigned base64 transactions)
-
-| Tool | Purpose | Key Params |
-|------|---------|-----------|
-| `open_position` | Open new perp position | `input_token_symbol`, `output_token_symbol`, `input_amount`, `leverage`, `trade_type`, `owner` |
-| `close_position` | Close/partial close position | `position_key`, `input_usd`, `withdraw_token_symbol` |
-| `add_collateral` | Add collateral (reduce leverage) | `position_key`, `deposit_amount`, `deposit_token_symbol`, `owner` |
-| `remove_collateral` | Remove collateral (increase leverage) | `position_key`, `withdraw_amount_usd`, `withdraw_token_symbol`, `owner` |
-| `reverse_position` | Close + open opposite direction | `position_key`, `owner` |
-
-### Trigger Order Tools (TP/SL management — return unsigned base64 transactions)
-
-| Tool | Purpose | Key Params |
-|------|---------|-----------|
-| `place_trigger_order` | Place TP or SL on existing position | `market_symbol`, `side`, `trigger_price`, `size_amount`, `is_stop_loss`, `owner` |
-| `edit_trigger_order` | Edit existing TP/SL (change price/size) | `market_symbol`, `side`, `order_id`, `trigger_price`, `size_amount`, `is_stop_loss`, `owner` |
-| `cancel_trigger_order` | Cancel a single TP or SL order | `market_symbol`, `side`, `order_id`, `is_stop_loss`, `owner` |
-| `cancel_all_trigger_orders` | Cancel all TP/SL for a market+side | `market_symbol`, `side`, `owner` |
-
-### Signing Tool
-
-| Tool | Purpose | Key Params |
-|------|---------|-----------|
-| `sign_and_send` | Sign a base64 transaction with local keypair and submit to Solana | `transaction_base64` |
-
-The `sign_and_send` tool reads the keypair from `KEYPAIR_PATH` (default `~/.config/solana/id.json`) and submits via `SOLANA_RPC_URL`. It returns the confirmed transaction signature and a Solscan explorer link. **Always show the transaction preview to the user and get approval before calling this tool.**
-
-### Typical AI Agent Workflow
-
-```
-1. health_check                          → Verify API is up
-2. get_trading_overview                  → See all markets with prices + pool utilization
-3. get_account_summary (owner=<wallet>)  → Check existing positions + orders + prices
-4. open_position (input_amount="12.0")   → Build trade (use $12+ for TP/SL!)
-   → Show preview to user
-   → User approves
-5. sign_and_send (transaction_base64)    → Sign and submit (call immediately!)
-6. get_account_summary (owner=<wallet>)  → Verify position opened
-7. preview_tp_sl                         → Calculate TP/SL levels
-8. place_trigger_order                   → Add TP/SL to position
-   → sign_and_send (transaction_base64)  → Sign and submit
-9. get_orders (owner=<wallet>)           → Verify trigger orders placed
-10. close_position                        → When ready to exit
-   → Show preview to user
-   → User approves
-11. sign_and_send (transaction_base64)   → Sign and submit
-```
-
-### Common Gotchas for AI Agents
-
-1. **$10 minimum**: Don't open $10 positions if you plan to set TP/SL — fees eat into collateral. Use $11-12 minimum.
-2. **Always preview first**: Show the user entry price, fees, leverage, and liquidation price before they sign.
-3. **Sign immediately**: After user approves a preview, call `sign_and_send` right away. Solana blockhashes expire in ~60 seconds. If you get a "Blockhash not found" error, re-call the transaction tool and `sign_and_send` back-to-back.
-4. **Position key**: You need the position's on-chain pubkey (from `get_positions`) to close, add/remove collateral, or set TP/SL.
-5. **Slippage**: Default 0.5%. Increase for volatile markets or large positions.
-6. **Degen mode**: Must be explicitly enabled for leverage above normal limits.
-7. **Mainnet prices only**: Devnet will return stale or zero prices from Pyth oracles.
-8. **API cache lag**: Data is cached ~15 seconds. After closing a position, `get_positions` or `get_account_summary` may still show it briefly. This is normal — the transaction is confirmed on-chain.
+Serves the V2 surface at ROOT (`https://flashapi.trade`); the documented `/v2` edge prefix is not deployed (set `FLASH_API_URL` to override). ER RPC `https://flash.magicblock.xyz`; base RPC mainnet-beta. See [`../V2-ALIGNMENT.md`](../V2-ALIGNMENT.md) for the full endpoint reference and the live-vs-spec drift notes.

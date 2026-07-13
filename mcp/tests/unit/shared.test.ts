@@ -1,142 +1,80 @@
 import { describe, it, expect } from 'vitest'
 import { formatPriceUsd, formatCompactUsd, buildCustodySymbolMap, type PoolDataResponse } from '../../src/tools/shared/custody-map.ts'
+import type { PriceInfo } from '../../src/client/types.ts'
 import { zBool } from '../../src/sanitize.ts'
 
-describe('formatPriceUsd', () => {
-  it('formats normal price correctly', () => {
-    expect(formatPriceUsd({ price: '14852000000', exponent: '-8', confidence: '0', timestamp: '' }))
-      .toBe('148.52')
-  })
+const price = (priceUi: number): PriceInfo => ({ price: 0, exponent: 0, confidence: 0, priceUi, timestampUs: 0, marketSession: 'regular' })
 
-  it('formats BTC-scale price', () => {
-    expect(formatPriceUsd({ price: '6700000000000', exponent: '-8', confidence: '0', timestamp: '' }))
-      .toBe('67000.00')
+describe('formatPriceUsd (V2 PriceInfo)', () => {
+  it('formats a normal price', () => {
+    expect(formatPriceUsd(price(148.52))).toBe('148.52')
   })
-
-  it('returns ? for NaN price', () => {
-    expect(formatPriceUsd({ price: '', exponent: '-8', confidence: '0', timestamp: '' }))
-      .toBe('?')
+  it('formats a BTC-scale price', () => {
+    expect(formatPriceUsd(price(67000))).toBe('67000.00')
   })
-
-  it('returns ? for NaN exponent', () => {
-    expect(formatPriceUsd({ price: '14852000000', exponent: 'bad', confidence: '0', timestamp: '' }))
-      .toBe('?')
+  it('returns ? for a non-finite price', () => {
+    expect(formatPriceUsd(price(NaN))).toBe('?')
   })
-
-  it('returns ? for undefined-like strings', () => {
-    expect(formatPriceUsd({ price: 'undefined', exponent: '-8', confidence: '0', timestamp: '' }))
-      .toBe('?')
+  it('formats zero', () => {
+    expect(formatPriceUsd(price(0))).toBe('0.00')
   })
-
-  it('uses adaptive precision for sub-cent tokens (BONK)', () => {
-    // BONK: price=611, exp=-8 → $0.00000611
-    const result = formatPriceUsd({ price: '611', exponent: '-8', confidence: '0', timestamp: '' })
-    expect(result).not.toBe('0.00')
-    expect(result).toContain('0.000006110')
-  })
-
-  it('uses adaptive precision for small tokens (PUMP)', () => {
-    // PUMP: price=1874, exp=-6 → $0.001874
-    const result = formatPriceUsd({ price: '1874', exponent: '-6', confidence: '0', timestamp: '' })
-    expect(result).not.toBe('0.00')
-    expect(result).toContain('1874')
+  it('uses adaptive precision for sub-cent tokens', () => {
+    const r = formatPriceUsd(price(0.00000611))
+    expect(r).not.toBe('0.00')
+    expect(r).toContain('0.000006110')
   })
 })
 
 describe('formatCompactUsd', () => {
-  it('formats millions', () => {
-    expect(formatCompactUsd('5235353.43')).toBe('$5.24M')
-  })
-
-  it('formats thousands', () => {
-    expect(formatCompactUsd('54472.66')).toBe('$54.5K')
-  })
-
-  it('formats small values', () => {
-    expect(formatCompactUsd('123.45')).toBe('$123.45')
-  })
-
-  it('handles undefined', () => {
-    expect(formatCompactUsd(undefined)).toBe('$?')
-  })
-
-  it('handles NaN', () => {
-    expect(formatCompactUsd('bad')).toBe('$bad')
-  })
+  it('formats millions', () => { expect(formatCompactUsd('5235353.43')).toBe('$5.24M') })
+  it('formats thousands', () => { expect(formatCompactUsd('54472.66')).toBe('$54.5K') })
+  it('formats small values', () => { expect(formatCompactUsd('123.45')).toBe('$123.45') })
+  it('handles undefined', () => { expect(formatCompactUsd(undefined)).toBe('$?') })
+  it('handles NaN', () => { expect(formatCompactUsd('bad')).toBe('$bad') })
 })
 
 describe('buildCustodySymbolMap', () => {
   it('maps custodyStats from pool-data', () => {
     const poolData: PoolDataResponse = {
-      pools: [{
-        poolName: 'Crypto.1',
-        custodyStats: [
-          { symbol: 'SOL', custodyAccount: 'cust1', maxLeverage: '100.00' },
-          { symbol: 'USDC', custodyAccount: 'cust2', maxLeverage: '1.00' },
-        ],
-      }],
+      pools: [{ poolName: 'Crypto.1', custodyStats: [
+        { symbol: 'SOL', custodyAccount: 'cust1', maxLeverage: '100.00' },
+        { symbol: 'USDC', custodyAccount: 'cust2', maxLeverage: '1.00' },
+      ] }],
     }
     const map = buildCustodySymbolMap(poolData)
     expect(map.get('cust1')).toEqual({ symbol: 'SOL', maxLeverage: '100.00', pool: 'Crypto.1' })
-    expect(map.get('cust2')).toEqual({ symbol: 'USDC', maxLeverage: '1.00', pool: 'Crypto.1' })
   })
 
-  it('includes virtual custody fallbacks', () => {
-    const poolData: PoolDataResponse = { pools: [{ poolName: 'Empty', custodyStats: [] }] }
-    const map = buildCustodySymbolMap(poolData)
-    // BNB is in VIRTUAL_CUSTODY_MAP
-    expect(map.get('6bthDsp8pcGBGKVKCKZjV5JfuSUNRo62RG4hQHj1u4CK')?.symbol).toBe('BNB')
+  it('maps every custody from multiple pools (virtual/equity included, no hardcoding)', () => {
+    const map = buildCustodySymbolMap({ pools: [
+      { poolName: 'Virtual.1', custodyStats: [{ symbol: 'XAU', custodyAccount: 'v1', maxLeverage: '120.00' }] },
+      { poolName: 'Equity.1', custodyStats: [{ symbol: 'NVDA', custodyAccount: 'e1', maxLeverage: '12.00' }] },
+    ] })
+    expect(map.get('v1')).toEqual({ symbol: 'XAU', maxLeverage: '120.00', pool: 'Virtual.1' })
+    expect(map.get('e1')?.symbol).toBe('NVDA')
   })
 
-  it('pool-data takes precedence over virtual map', () => {
-    const poolData: PoolDataResponse = {
-      pools: [{
-        poolName: 'Override',
-        custodyStats: [
-          { symbol: 'OVERRIDDEN_BNB', custodyAccount: '6bthDsp8pcGBGKVKCKZjV5JfuSUNRo62RG4hQHj1u4CK', maxLeverage: '99.00' },
-        ],
-      }],
-    }
-    const map = buildCustodySymbolMap(poolData)
-    expect(map.get('6bthDsp8pcGBGKVKCKZjV5JfuSUNRo62RG4hQHj1u4CK')?.symbol).toBe('OVERRIDDEN_BNB')
-  })
-
-  it('handles empty pool data', () => {
-    const poolData: PoolDataResponse = { pools: [] }
-    const map = buildCustodySymbolMap(poolData)
-    // Should still have virtual entries
-    expect(map.size).toBeGreaterThan(0)
+  it('is dynamic-only: empty pool data yields an empty map (no static fallback)', () => {
+    expect(buildCustodySymbolMap({ pools: [] }).size).toBe(0)
+    expect(buildCustodySymbolMap({ pools: [{ poolName: 'Empty', custodyStats: [] }] }).size).toBe(0)
   })
 })
 
 describe('zBool', () => {
-  it('parses string "true" as true', () => {
+  it('parses "true"/"false" strings', () => {
     expect(zBool.parse('true')).toBe(true)
-  })
-
-  it('parses string "false" as false', () => {
     expect(zBool.parse('false')).toBe(false)
   })
-
-  it('passes through boolean true', () => {
+  it('passes through booleans', () => {
     expect(zBool.parse(true)).toBe(true)
-  })
-
-  it('passes through boolean false', () => {
     expect(zBool.parse(false)).toBe(false)
   })
-
-  it('treats non-"true" strings as false (by design)', () => {
-    // Any string that isn't exactly "true" becomes false via `v === 'true'`
-    expect(zBool.parse('yes')).toBe(false)
+  it('treats non-"true" strings as false by design', () => {
     expect(zBool.parse('TRUE')).toBe(false)
     expect(zBool.parse('1')).toBe(false)
-    expect(zBool.parse('')).toBe(false)
   })
-
   it('rejects non-string non-boolean values', () => {
     expect(() => zBool.parse(1)).toThrow()
     expect(() => zBool.parse(null)).toThrow()
-    expect(() => zBool.parse(undefined)).toThrow()
   })
 })

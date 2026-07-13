@@ -22,16 +22,13 @@ try {
 
   const server = new McpServer({
     name: 'flash-trade',
-    version: '0.4.1',
+    version: '1.0.0',
   }, {
-    capabilities: {
-      tools: {},
-      resources: {},
-    },
+    capabilities: { tools: {}, resources: {} },
   })
 
   registerReadTools(server, client)
-  registerTransactionTools(server, client)
+  registerTransactionTools(server, client, config)
   registerPreviewTools(server, client)
   registerResources(server, client)
 

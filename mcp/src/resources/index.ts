@@ -3,10 +3,9 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 
 export function registerResources(server: McpServer, client: FlashApiClient) {
-  // Global accounts snapshot (static resource — no parameters)
+  // Global accounts snapshot (raw pools / custodies / markets).
   server.registerResource('flash-accounts', 'flash://accounts', {
-    description:
-      'Snapshot of all Flash Trade on-chain accounts: pools, custodies, markets, and global config. For real-time updates, poll this resource periodically.',
+    description: 'Snapshot of Flash V2 on-chain accounts: raw pools, custodies, and markets. Poll periodically for updates.',
     mimeType: 'application/json',
   }, async () => {
     const [pools, custodies, markets] = await Promise.all([
@@ -23,56 +22,19 @@ export function registerResources(server: McpServer, client: FlashApiClient) {
     }
   })
 
-  // Owner positions (template resource — parameterized by owner)
+  // Per-owner snapshot (the V2 read model — basket, positions, orders).
   server.registerResource(
-    'flash-positions',
-    new ResourceTemplate('flash://positions/{owner}', {
-      list: undefined,
-      complete: {
-        owner: () => [],
-      },
-    }),
+    'flash-owner',
+    new ResourceTemplate('flash://owner/{owner}', { list: undefined, complete: { owner: () => [] } }),
     {
-      description:
-        'Enriched position snapshot for a wallet owner. Returns positions with computed PnL, leverage, and liquidation price. Read this resource to get the current state; for continuous updates, poll periodically.',
+      description: 'The V2 owner snapshot for a wallet: basket PDA, enriched positions and orders. basketPubkey=null means the account is not set up. Poll periodically for updates.',
       mimeType: 'application/json',
     },
     async (uri, { owner }) => {
       const ownerStr = typeof owner === 'string' ? owner : String(owner)
-      const positions = await client.getOwnerPositions(ownerStr)
+      const snapshot = await client.getOwner(ownerStr)
       return {
-        contents: [{
-          uri: uri.href,
-          mimeType: 'application/json',
-          text: JSON.stringify(positions, null, 2),
-        }],
-      }
-    },
-  )
-
-  // Owner orders (template resource — parameterized by owner)
-  server.registerResource(
-    'flash-orders',
-    new ResourceTemplate('flash://orders/{owner}', {
-      list: undefined,
-      complete: {
-        owner: () => [],
-      },
-    }),
-    {
-      description:
-        'Enriched order snapshot for a wallet owner. Returns limit orders, take-profit, and stop-loss orders with computed trigger prices and sizes.',
-      mimeType: 'application/json',
-    },
-    async (uri, { owner }) => {
-      const ownerStr = typeof owner === 'string' ? owner : String(owner)
-      const orders = await client.getOwnerOrders(ownerStr)
-      return {
-        contents: [{
-          uri: uri.href,
-          mimeType: 'application/json',
-          text: JSON.stringify(orders, null, 2),
-        }],
+        contents: [{ uri: uri.href, mimeType: 'application/json', text: JSON.stringify(snapshot, null, 2) }],
       }
     },
   )

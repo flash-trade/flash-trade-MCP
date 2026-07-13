@@ -30,15 +30,6 @@ pub fn color_side(side: &str) -> String {
     }
 }
 
-pub fn color_leverage(leverage: f64) -> String {
-    let formatted = format!("{:.1}x", leverage);
-    if leverage > 10.0 {
-        formatted.yellow().to_string()
-    } else {
-        formatted
-    }
-}
-
 pub fn format_usd(value: f64) -> String {
     let abs = value.abs();
     let sign = if value < 0.0 { "-" } else { "" };

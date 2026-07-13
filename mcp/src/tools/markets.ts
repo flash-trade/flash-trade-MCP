@@ -1,61 +1,49 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
-import { buildCustodySymbolMap, type CustodyInfo, type MarketAccount, type PoolDataResponse } from './shared/custody-map.ts'
-
-function formatMarketsSummary(
-  markets: MarketAccount[],
-  custodyInfo: Map<string, CustodyInfo>,
-): string {
-  const lines = [
-    `${markets.length} markets available:\n`,
-    'Symbol     | Side  | Pool           | Max Lev | Pubkey',
-    '-----------|-------|----------------|---------|----------------------------------------------',
-  ]
-
-  const enriched = markets.map((m) => {
-    const info = custodyInfo.get(m.account.target_custody)
-    return {
-      symbol: info?.symbol ?? 'UNKNOWN',
-      pool: info?.pool ?? '?',
-      maxLeverage: info?.maxLeverage ?? '?',
-      side: m.account.side,
-      pubkey: m.pubkey,
-      open: m.account.permissions.allow_open_position,
-    }
-  }).sort((a, b) => a.pool.localeCompare(b.pool) || a.symbol.localeCompare(b.symbol) || a.side.localeCompare(b.side))
-
-  for (const m of enriched) {
-    const status = m.open ? '' : ' [CLOSED]'
-    lines.push(
-      `${m.symbol.padEnd(10)} | ${m.side.padEnd(5)} | ${m.pool.padEnd(14)} | ${m.maxLeverage.padEnd(7)} | ${m.pubkey}${status}`,
-    )
-  }
-
-  lines.push(`\nUse get_market with a pubkey for full details. Use get_prices for current oracle prices.`)
-  return lines.join('\n')
-}
+import { buildCustodySymbolMap, type MarketAccount, type PoolDataResponse } from './shared/custody-map.ts'
 
 export function registerMarketTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('get_markets', {
     description:
-      'List all available perpetual futures markets. Returns a summary table with symbol, side, pool, max leverage, and pubkey. For a trading-ready view with prices, use get_trading_overview instead.',
+      'List all perpetual markets with resolved symbols, side (long/short custody), pool, and whether opening is allowed. ' +
+      'For prices + pool utilization in one shot, use get_trading_overview instead.',
   }, async () => {
     const [markets, poolData] = await Promise.all([
       client.getMarkets() as Promise<MarketAccount[]>,
-      client.getPoolData() as unknown as Promise<PoolDataResponse>,
+      client.getPoolData() as Promise<PoolDataResponse>,
     ])
-    const custodyInfo = buildCustodySymbolMap(poolData)
-    const text = formatMarketsSummary(markets, custodyInfo)
-    return { content: [{ type: 'text' as const, text }] }
+    const custody = buildCustodySymbolMap(poolData)
+    const rows = markets.map((m) => {
+      const info = custody.get(m.account.target_custody)
+      return {
+        symbol: info?.symbol ?? 'UNKNOWN',
+        pool: info?.pool ?? '?',
+        maxLev: info?.maxLeverage ?? '?',
+        side: m.account.side,
+        open: m.account.permissions?.allow_open_position ?? false,
+      }
+    }).sort((a, b) => a.pool.localeCompare(b.pool) || a.symbol.localeCompare(b.symbol))
+
+    const lines = ['=== Markets ===', 'Symbol     | Side  | Max Lev | Pool           | Open?']
+    lines.push('-----------|-------|---------|----------------|------')
+    const seen = new Set<string>()
+    for (const r of rows) {
+      const key = `${r.symbol}-${r.side}`
+      if (seen.has(key)) continue
+      seen.add(key)
+      lines.push(`${r.symbol.padEnd(10)} | ${r.side.padEnd(5)} | ${r.maxLev.padEnd(7)} | ${r.pool.padEnd(14)} | ${r.open ? 'yes' : 'NO'}`)
+    }
+    return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
   })
 
   server.registerTool('get_market', {
-    description:
-      'Get detailed information about a specific market by its on-chain account pubkey. Returns full market configuration including permissions and collective position data.',
-    inputSchema: { pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Solana pubkey of the market account') },
+    description: 'Get the raw Anchor-decoded account for one market by pubkey (debugging / deep dives).',
+    inputSchema: {
+      pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Market account pubkey'),
+    },
   }, async ({ pubkey }) => {
-    const market = await client.getMarket(pubkey)
-    return { content: [{ type: 'text' as const, text: JSON.stringify(market, null, 2) }] }
+    const m = await client.getMarket(pubkey)
+    return { content: [{ type: 'text' as const, text: JSON.stringify(m, null, 2) }] }
   })
 }

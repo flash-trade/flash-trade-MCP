@@ -2,19 +2,25 @@ import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { zBool } from '../sanitize.ts'
+import { txFooter } from './shared/tx.ts'
+
+const pubkey = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
+const side = z.enum(['LONG', 'SHORT'])
 
 export function registerTriggerOrderTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('place_trigger_order', {
     description:
-      'Place a take-profit (TP) or stop-loss (SL) trigger order on an existing position. Up to 5 per position. ' +
-      'Use preview_tp_sl first to calculate optimal trigger prices. Returns unsigned transaction.',
+      'Build a transaction to place ONE trigger order (take-profit or stop-loss) on an existing position (ER chain). ' +
+      'Up to 5 triggers per side (slots 0–4). The API does NOT validate the trigger price vs the oracle — LONG: TP ' +
+      'above mark, SL below; SHORT mirrored — a wrong side fails on-chain as InvalidLimitPrice (6057). Requires >$10 ' +
+      'collateral after fees.',
     inputSchema: {
-      market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
-      side: z.enum(['LONG', 'SHORT']).describe('Position side'),
-      trigger_price: z.string().max(32).describe('Trigger price in UI format, e.g. "160.00"'),
-      size_amount: z.string().max(32).describe('Size in target token to close when triggered, e.g. "0.5"'),
+      market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL"'),
+      side: side.describe('Side of the position'),
+      trigger_price: z.string().max(32).describe('Trigger price in UI units'),
+      size_amount: z.string().max(32).describe('Target-token size to close when it fires'),
       is_stop_loss: zBool.describe('true = stop-loss, false = take-profit'),
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (must own the position)'),
+      owner: pubkey.describe('Wallet pubkey'),
     },
   }, async (params) => {
     const res = await client.placeTriggerOrder({
@@ -25,32 +31,22 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       isStopLoss: params.is_stop_loss,
       owner: params.owner,
     })
-    const lines = [
-      `=== Place ${params.is_stop_loss ? 'Stop-Loss' : 'Take-Profit'} Order ===`,
-      `Market: ${params.market_symbol} ${params.side}`,
-      `Trigger: $${params.trigger_price}`,
-      `Size: ${params.size_amount} ${params.market_symbol}`,
-    ]
-    if (res.err) lines.push(`\nWARNING: ${res.err}`)
-    if (res.transactionBase64) {
-      lines.push(`\nTransaction (base64, unsigned — sign with wallet):`)
-      lines.push(res.transactionBase64)
-      lines.push(`\nNext: After signing, call get_orders with owner to see the order ID for editing/canceling.`)
-    }
-    return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+    const kind = params.is_stop_loss ? 'Stop-Loss' : 'Take-Profit'
+    return { content: [{ type: 'text' as const, text: `=== Place ${kind} — ${params.side} ${params.market_symbol} @ $${params.trigger_price} ===${txFooter('place-trigger-order', res.transactionBase64)}` }] }
   })
 
   server.registerTool('edit_trigger_order', {
     description:
-      'Edit an existing TP or SL trigger order. Change trigger price, size, or type. Requires order_id (0-7) from get_orders. Returns unsigned transaction.',
+      'Build a transaction to edit a trigger slot (ER chain). BOTH trigger_price AND size_amount are required — there ' +
+      'is no "keep existing" for triggers (unlike edit_limit_order). Identify the slot by order_id (0–4).',
     inputSchema: {
-      market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
-      side: z.enum(['LONG', 'SHORT']).describe('Position side'),
-      order_id: z.coerce.number().describe('Index of the trigger order to edit (0-7)'),
-      trigger_price: z.string().max(32).describe('New trigger price in UI format'),
-      size_amount: z.string().max(32).describe('New size in target token'),
+      market_symbol: z.string().max(16).describe('Market symbol'),
+      side: side.describe('Side of the position'),
+      order_id: z.number().int().min(0).max(4).describe('Trigger slot 0–4'),
+      trigger_price: z.string().max(32).describe('New trigger price (REQUIRED)'),
+      size_amount: z.string().max(32).describe('New size (REQUIRED)'),
       is_stop_loss: zBool.describe('true = stop-loss, false = take-profit'),
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (must be original order owner)'),
+      owner: pubkey.describe('Wallet pubkey'),
     },
   }, async (params) => {
     const res = await client.editTriggerOrder({
@@ -62,29 +58,19 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       isStopLoss: params.is_stop_loss,
       owner: params.owner,
     })
-    const lines = [
-      `=== Edit ${params.is_stop_loss ? 'Stop-Loss' : 'Take-Profit'} Order #${params.order_id} ===`,
-      `Market: ${params.market_symbol} ${params.side}`,
-      `New Trigger: $${params.trigger_price}`,
-      `New Size: ${params.size_amount} ${params.market_symbol}`,
-    ]
-    if (res.err) lines.push(`\nWARNING: ${res.err}`)
-    if (res.transactionBase64) {
-      lines.push(`\nTransaction (base64, unsigned — sign with wallet):`)
-      lines.push(res.transactionBase64)
-    }
-    return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+    return { content: [{ type: 'text' as const, text: `=== Edit Trigger #${params.order_id} — ${params.side} ${params.market_symbol} ===${txFooter('edit-trigger-order', res.transactionBase64)}` }] }
   })
 
   server.registerTool('cancel_trigger_order', {
     description:
-      'Cancel a single TP or SL trigger order. Requires order_id (0-7) from get_orders. Returns unsigned transaction.',
+      'Build a transaction to cancel one trigger slot (ER chain). order_id 0–4 cancels that slot; order_id 255 cancels ' +
+      'ALL triggers for the market+side (the sentinel). For a clearer all-cancel, use cancel_all_trigger_orders.',
     inputSchema: {
-      market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
-      side: z.enum(['LONG', 'SHORT']).describe('Position side'),
-      order_id: z.coerce.number().describe('Index of the trigger order to cancel (0-7)'),
-      is_stop_loss: zBool.describe('true = stop-loss, false = take-profit'),
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (must own the order)'),
+      market_symbol: z.string().max(16).describe('Market symbol'),
+      side: side.describe('Side of the position'),
+      order_id: z.number().int().min(0).max(255).describe('Slot 0–4, or 255 = cancel all'),
+      is_stop_loss: zBool.describe('true = stop-loss, false = take-profit (ignored when order_id=255)'),
+      owner: pubkey.describe('Wallet pubkey'),
     },
   }, async (params) => {
     const res = await client.cancelTriggerOrder({
@@ -94,25 +80,16 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       isStopLoss: params.is_stop_loss,
       owner: params.owner,
     })
-    const lines = [
-      `=== Cancel ${params.is_stop_loss ? 'Stop-Loss' : 'Take-Profit'} Order #${params.order_id} ===`,
-      `Market: ${params.market_symbol} ${params.side}`,
-    ]
-    if (res.err) lines.push(`\nWARNING: ${res.err}`)
-    if (res.transactionBase64) {
-      lines.push(`\nTransaction (base64, unsigned — sign with wallet):`)
-      lines.push(res.transactionBase64)
-    }
-    return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+    const label = params.order_id === 255 ? 'ALL triggers' : `trigger #${params.order_id}`
+    return { content: [{ type: 'text' as const, text: `=== Cancel ${label} — ${params.side} ${params.market_symbol} ===${txFooter('cancel-trigger-order', res.transactionBase64)}` }] }
   })
 
   server.registerTool('cancel_all_trigger_orders', {
-    description:
-      'Cancel ALL TP and SL trigger orders for a market+side in one transaction. Returns unsigned transaction.',
+    description: 'Build a transaction to cancel ALL trigger orders (TP + SL) for a market + side (ER chain).',
     inputSchema: {
-      market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
-      side: z.enum(['LONG', 'SHORT']).describe('Position side'),
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (must own the orders)'),
+      market_symbol: z.string().max(16).describe('Market symbol'),
+      side: side.describe('Side of the position'),
+      owner: pubkey.describe('Wallet pubkey'),
     },
   }, async (params) => {
     const res = await client.cancelAllTriggerOrders({
@@ -120,15 +97,6 @@ export function registerTriggerOrderTools(server: McpServer, client: FlashApiCli
       side: params.side,
       owner: params.owner,
     })
-    const lines = [
-      `=== Cancel All Trigger Orders ===`,
-      `Market: ${params.market_symbol} ${params.side}`,
-    ]
-    if (res.err) lines.push(`\nWARNING: ${res.err}`)
-    if (res.transactionBase64) {
-      lines.push(`\nTransaction (base64, unsigned — sign with wallet):`)
-      lines.push(res.transactionBase64)
-    }
-    return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
+    return { content: [{ type: 'text' as const, text: `=== Cancel All Triggers — ${params.side} ${params.market_symbol} ===${txFooter('cancel-all-trigger-orders', res.transactionBase64)}` }] }
   })
 }

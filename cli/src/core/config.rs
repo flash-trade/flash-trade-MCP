@@ -28,9 +28,6 @@ pub struct Settings {
     /// Additional RPC URLs to try when the primary fails (tried in order).
     #[serde(default)]
     pub rpc_fallbacks: Vec<String>,
-    /// URL to fetch fresh pool configs from (falls back to bundled JSON on failure).
-    #[serde(default)]
-    pub pool_config_url: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -49,7 +46,6 @@ impl Default for Settings {
             priority_fee: 100_000,
             rpc_failover: true,
             rpc_fallbacks: Vec::new(),
-            pool_config_url: None,
         }
     }
 }
@@ -192,22 +188,9 @@ impl Config {
                     value.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
                 };
             }
-            "pool_config_url" => {
-                settings.pool_config_url = if value.is_empty() || value == "none" {
-                    None
-                } else if !value.starts_with("https://") {
-                    anyhow::bail!(
-                        "pool_config_url must use HTTPS to prevent man-in-the-middle attacks \
-                         on pool config data. Got: '{}'",
-                        redact_url(value)
-                    )
-                } else {
-                    Some(value.to_string())
-                };
-            }
             _ => anyhow::bail!(
                 "Unknown setting: '{key}'. Valid keys: active_key, output_format, cluster, rpc_url, \
-                 default_slippage_bps, commitment, priority_fee, rpc_failover, rpc_fallbacks, pool_config_url"
+                 default_slippage_bps, commitment, priority_fee, rpc_failover, rpc_fallbacks"
             ),
         }
         Self::save(&settings)?;

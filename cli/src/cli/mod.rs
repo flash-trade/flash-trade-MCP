@@ -1,33 +1,9 @@
-pub mod config_cmd;
-pub mod earn;
-pub mod keys;
-pub mod orders;
-pub mod perps;
-
-pub use config_cmd::ConfigCommand;
-pub use earn::EarnCommand;
-pub use keys::KeysCommand;
-pub use orders::OrdersCommand;
-pub use perps::PerpsCommand;
-
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(
-    name = "flash",
-    version,
-    about = "CLI tool for Flash Trade perpetuals protocol"
-)]
+#[command(name = "flash", version, about = "Flash Trade V2 CLI — MagicBlock Ephemeral Rollup, REST + local signing")]
 pub struct App {
-    /// Output format
-    #[arg(long, global = true, default_value = "table")]
-    pub format: OutputFormat,
-
-    /// Solana cluster
-    #[arg(long, global = true)]
-    pub cluster: Option<Cluster>,
-
-    /// Keypair name from keystore
+    /// Keypair name to use (overrides the active key). See `flash keys`.
     #[arg(long, global = true)]
     pub key: Option<String>,
 
@@ -37,58 +13,255 @@ pub struct App {
 
 #[derive(Subcommand)]
 pub enum Command {
-    /// Perpetuals trading commands
+    /// API health + which pool config is live (program, env, account counts)
+    Health,
+    /// List tokens with MINT addresses + Token-2022 flags (deposits need mints)
+    Tokens { symbol: Option<String> },
+    /// Live oracle price for one symbol
+    Price {
+        symbol: String,
+        #[arg(long)]
+        watch: bool,
+    },
+    /// All live oracle prices
+    Prices,
+    /// List markets (symbol, side, max leverage, pool)
+    Markets,
+    /// Owner snapshot: setup status + positions (mark-price PnL) + orders
+    Account { owner: Option<String> },
+    /// One-time account setup (base chain): basket -> ledger -> delegate -> deposit
+    Setup {
+        #[command(subcommand)]
+        command: SetupCommand,
+    },
+    /// Trading (Ephemeral Rollup): open/close/reverse/collateral/triggers/limits
     Perps {
         #[command(subcommand)]
         command: PerpsCommand,
     },
-
-    /// Order management commands
-    Orders {
+    /// Withdrawals (base chain), two steps: request -> execute
+    Withdraw {
         #[command(subcommand)]
-        command: OrdersCommand,
+        command: WithdrawCommand,
     },
-
-    /// Liquidity and staking commands
-    Earn {
-        #[command(subcommand)]
-        command: EarnCommand,
-    },
-
-    /// Configuration management
-    Config {
-        #[command(subcommand)]
-        command: ConfigCommand,
-    },
-
-    /// Keypair management
+    /// Manage local keypairs
     Keys {
         #[command(subcommand)]
         command: KeysCommand,
     },
-
-    /// Get current price for a token
-    Price {
-        /// Token symbol (e.g., SOL, BTC, ETH)
-        symbol: String,
-
-        /// Watch price with live updates (5s refresh)
-        #[arg(long)]
-        watch: bool,
+    /// Manage CLI settings
+    Config {
+        #[command(subcommand)]
+        command: ConfigCommand,
     },
-
-    /// Show CLI and SDK versions
-    Version,
 }
 
-#[derive(Clone, Copy, ValueEnum)]
-pub enum OutputFormat {
-    Table,
-    Json,
+#[derive(Subcommand)]
+pub enum SetupCommand {
+    /// Show which lifecycle step is missing for an owner
+    Status { owner: Option<String> },
+    /// Step 1: create the Basket PDA
+    InitBasket {
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Step 2: create the deposit ledger
+    InitLedger {
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Step 3: delegate the basket to the MagicBlock validator
+    Delegate {
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Step 4: deposit collateral (takes a token SYMBOL, resolved to its mint)
+    Deposit {
+        token: String,
+        amount: String,
+        #[arg(long)]
+        submit: bool,
+    },
 }
 
-#[derive(Clone, Copy, ValueEnum)]
-pub enum Cluster {
-    Mainnet,
-    Devnet,
+#[derive(Subcommand)]
+pub enum PerpsCommand {
+    /// Open (or quote) a position. Omit --submit to print the unsigned tx.
+    Open {
+        symbol: String,
+        side: String,
+        collateral_usd: String,
+        leverage: String,
+        #[arg(long, default_value = "USDC")]
+        collateral_token: String,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Close a position by market symbol + side ("0" or >=97% of size = full)
+    Close {
+        symbol: String,
+        side: String,
+        #[arg(long, default_value = "0")]
+        usd: String,
+        #[arg(long, default_value = "USDC")]
+        withdraw_token: String,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Flip LONG<->SHORT atomically (2% haircut on proceeds)
+    Reverse {
+        symbol: String,
+        side: String,
+        leverage: String,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Add collateral to a position
+    AddCollateral {
+        symbol: String,
+        side: String,
+        amount: String,
+        #[arg(long, default_value = "USDC")]
+        token: String,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Remove collateral from a position
+    RemoveCollateral {
+        symbol: String,
+        side: String,
+        usd: String,
+        #[arg(long, default_value = "USDC")]
+        token: String,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Place a TP and/or SL bracket in one atomic transaction
+    TpSl {
+        symbol: String,
+        side: String,
+        size: String,
+        #[arg(long)]
+        tp: Option<String>,
+        #[arg(long)]
+        sl: Option<String>,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Trigger-order management (TP/SL)
+    Trigger {
+        #[command(subcommand)]
+        command: TriggerCommand,
+    },
+    /// Limit-order management
+    Limit {
+        #[command(subcommand)]
+        command: LimitCommand,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum TriggerCommand {
+    /// Place one TP or SL
+    Place {
+        symbol: String,
+        side: String,
+        price: String,
+        size: String,
+        #[arg(long)]
+        stop_loss: bool,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Edit a trigger slot (both price and size required)
+    Edit {
+        symbol: String,
+        side: String,
+        order_id: u8,
+        price: String,
+        size: String,
+        #[arg(long)]
+        stop_loss: bool,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Cancel one trigger (order_id 0-4) or all (255)
+    Cancel {
+        symbol: String,
+        side: String,
+        order_id: u8,
+        #[arg(long)]
+        stop_loss: bool,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Cancel all triggers for a market + side
+    CancelAll {
+        symbol: String,
+        side: String,
+        #[arg(long)]
+        submit: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum LimitCommand {
+    /// Edit a resting limit order (omitted fields keep existing)
+    Edit {
+        symbol: String,
+        side: String,
+        order_id: u8,
+        #[arg(long)]
+        price: Option<String>,
+        #[arg(long)]
+        size: Option<String>,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Cancel a resting limit order
+    Cancel {
+        symbol: String,
+        side: String,
+        order_id: u8,
+        #[arg(long)]
+        submit: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum WithdrawCommand {
+    /// Step 1: escrow + schedule settlement (takes a token SYMBOL -> mint)
+    Request {
+        token: String,
+        amount: String,
+        #[arg(long)]
+        submit: bool,
+    },
+    /// Step 2: move settled funds to the wallet (retry if 0xbc4 timing state)
+    Execute {
+        token: String,
+        #[arg(long)]
+        submit: bool,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum KeysCommand {
+    List,
+    Generate { name: String },
+    Add {
+        name: String,
+        #[arg(long)]
+        file: Option<String>,
+    },
+    Delete { name: String },
+    Use { name: String },
+    Show { name: String },
+}
+
+#[derive(Subcommand)]
+pub enum ConfigCommand {
+    List,
+    Set { key: String, value: String },
+    Reset,
 }

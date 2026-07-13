@@ -1,15 +1,15 @@
 import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
-import { zBool } from '../sanitize.ts'
 import type { OpenPositionResponse } from '../client/types.ts'
+import { txFooter } from './shared/tx.ts'
 
-function formatOpenPreview(req: { outputTokenSymbol: string; tradeType: string; inputTokenSymbol: string; inputAmountUi: string }, res: OpenPositionResponse): string {
+function formatPreview(req: { outputTokenSymbol: string; tradeType: string; inputTokenSymbol: string }, res: OpenPositionResponse): string {
   const lines = [
     '=== Open Position Preview ===',
     `Market: ${req.outputTokenSymbol}/USD ${req.tradeType}`,
     `Entry Price: $${res.newEntryPrice}`,
-    `Position Size: $${res.youRecieveUsdUi} (${res.outputAmountUi} ${req.outputTokenSymbol})`,
+    `Effective Size: $${res.youRecieveUsdUi} (${res.outputAmountUi} ${req.outputTokenSymbol})`,
     `Collateral: $${res.youPayUsdUi} ${req.inputTokenSymbol}`,
     `Leverage: ${res.newLeverage}x`,
     `Liquidation Price: $${res.newLiquidationPrice}`,
@@ -17,48 +17,33 @@ function formatOpenPreview(req: { outputTokenSymbol: string; tradeType: string; 
     `Hourly Borrow Rate: ${res.marginFeePercentage}%`,
     `Available Liquidity: $${res.availableLiquidity}`,
   ]
-  if (res.oldEntryPrice) {
-    lines.push(`\nExisting Position — Old Entry: $${res.oldEntryPrice}, Old Leverage: ${res.oldLeverage}x`)
-  }
-  if (res.takeProfitQuote) {
-    const tp = res.takeProfitQuote
-    lines.push(`\nTake Profit → PnL: $${tp.profitUsdUi} (+${tp.pnlPercentage}%), Exit: $${tp.exitPriceUi}`)
-  }
-  if (res.stopLossQuote) {
-    const sl = res.stopLossQuote
-    lines.push(`Stop Loss → PnL: -$${sl.lossUsdUi} (-${sl.pnlPercentage}%), Exit: $${sl.exitPriceUi}`)
-  }
-  if (res.err) {
-    lines.push(`\nWARNING: ${res.err}`)
-  }
-  if (res.transactionBase64) {
-    lines.push(`\nTransaction (base64, unsigned — sign with wallet):`)
-    lines.push(res.transactionBase64)
-  } else {
-    lines.push(`\nNo transaction built (provide owner wallet pubkey to build transaction)`)
-  }
+  if (res.oldEntryPrice) lines.push(`Existing position — Old Entry: $${res.oldEntryPrice}, Old Leverage: ${res.oldLeverage}x`)
+  if (res.takeProfitQuote) lines.push(`Take Profit → PnL: $${res.takeProfitQuote.profitUsdUi} (+${res.takeProfitQuote.pnlPercentage}%), Exit: $${res.takeProfitQuote.exitPriceUi}`)
+  if (res.stopLossQuote) lines.push(`Stop Loss → PnL: -$${res.stopLossQuote.lossUsdUi} (-${res.stopLossQuote.pnlPercentage}%), Exit: $${res.stopLossQuote.exitPriceUi}`)
+  if (res.passesMaxPositionSize === false) lines.push(`WARNING: exceeds max position size ($${res.maxPositionSizeUsd}).`)
   return lines.join('\n')
 }
 
 export function registerOpenPositionTool(server: McpServer, client: FlashApiClient) {
   server.registerTool('open_position', {
     description:
-      'Build a transaction to open a new perpetual futures position. Returns a preview (entry price, fees, leverage, liquidation price) AND an unsigned transaction. ' +
-      'Show the preview to the user before signing. Supports MARKET and LIMIT orders with optional TP/SL. ' +
-      'IMPORTANT: Use at least $11 input_amount if setting take_profit or stop_loss — collateral after fees must exceed $10 for TP/SL to work on-chain.',
+      'Build a transaction to open (or increase) a perpetual position, OR get a free quote. Omit `owner` for a ' +
+      'preview-only quote (no transaction is built). Include `owner` to also get the unsigned transaction (ER chain). ' +
+      'Supports MARKET and LIMIT orders with optional bundled TP/SL. The effective size is reshaped by the entry ' +
+      'spread — trust the returned youRecieveUsdUi / leverage, not collateral×leverage. ' +
+      'Use at least $11 collateral if setting TP/SL/limit — collateral after fees must exceed $10 or they fail on-chain.',
     inputSchema: {
-      input_token_symbol: z.string().max(16).describe('Token to pay with: "USDC", "SOL", etc.'),
-      output_token_symbol: z.string().max(16).describe('Market to trade: "SOL", "BTC", "ETH", etc.'),
-      input_amount: z.string().max(32).describe('Amount of input token, e.g. "100.0"'),
+      input_token_symbol: z.string().max(16).describe('Collateral token symbol: "USDC", "SOL", etc.'),
+      output_token_symbol: z.string().max(16).describe('Market symbol to trade: "SOL", "BTC", "ETH", etc.'),
+      input_amount: z.string().max(32).describe('Collateral amount in UI units, e.g. "11.0"'),
       leverage: z.string().max(8).describe('Leverage multiplier, e.g. "5.0"'),
       trade_type: z.enum(['LONG', 'SHORT']).describe('Trade direction'),
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (required to build the transaction)'),
+      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional().describe('Wallet pubkey — OMIT for a free quote, include to build the transaction'),
       order_type: z.enum(['MARKET', 'LIMIT']).optional().describe('Default: MARKET'),
-      limit_price: z.string().max(32).optional().describe('Required for LIMIT orders, UI format price'),
+      limit_price: z.string().max(32).optional().describe('Required for LIMIT orders (UI price)'),
       slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
-      take_profit: z.string().max(32).optional().describe('TP trigger price in UI format'),
-      stop_loss: z.string().max(32).optional().describe('SL trigger price in UI format'),
-      degen_mode: zBool.optional().describe('Enable degen mode (higher leverage limits)'),
+      take_profit: z.string().max(32).optional().describe('Bundled TP trigger price (UI)'),
+      stop_loss: z.string().max(32).optional().describe('Bundled SL trigger price (UI)'),
     },
   }, async (params) => {
     const res = await client.openPosition({
@@ -73,20 +58,22 @@ export function registerOpenPositionTool(server: McpServer, client: FlashApiClie
       slippagePercentage: params.slippage_percentage,
       takeProfit: params.take_profit,
       stopLoss: params.stop_loss,
-      degenMode: params.degen_mode,
     })
-    let text = formatOpenPreview({
-      outputTokenSymbol: params.output_token_symbol,
-      tradeType: params.trade_type,
-      inputTokenSymbol: params.input_token_symbol,
-      inputAmountUi: params.input_amount,
-    }, res)
-    if ((params.take_profit || params.stop_loss)) {
+
+    let text = formatPreview({ outputTokenSymbol: params.output_token_symbol, tradeType: params.trade_type, inputTokenSymbol: params.input_token_symbol }, res)
+
+    if (params.take_profit || params.stop_loss) {
       const collateral = parseFloat(res.youPayUsdUi || '0')
       const fee = parseFloat(res.entryFee || '0')
       if (collateral - fee < 10) {
-        text += '\n\nWARNING: Collateral after fees is below $10. Take-profit and stop-loss orders require >$10 collateral and will FAIL on-chain. Use at least $11-12 input_amount.'
+        text += '\n\nWARNING: Collateral after fees is below $10. TP/SL/limit require >$10 collateral and will FAIL on-chain. Use at least $11–12.'
       }
+    }
+
+    if (params.owner) {
+      text += txFooter('open-position', res.transactionBase64)
+    } else {
+      text += '\n\n(Quote only — no owner provided, so no transaction was built. Pass owner to build the transaction.)'
     }
     return { content: [{ type: 'text' as const, text }] }
   })

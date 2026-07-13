@@ -59,7 +59,7 @@ describe.skipIf(!process.env.RUN_INTEGRATION)('MCP protocol', () => {
     expect(response.result.capabilities.tools).toBeDefined()
   })
 
-  it('lists all 30 tools', async () => {
+  it('lists all 40 tools', async () => {
     const proc = spawn('bun', ['run', 'src/index.ts'], {
       cwd: process.cwd(),
       env: { ...process.env, FLASH_API_URL: process.env.FLASH_API_URL ?? 'http://localhost:3000' },
@@ -79,9 +79,10 @@ describe.skipIf(!process.env.RUN_INTEGRATION)('MCP protocol', () => {
     expect(toolsResponse).toBeDefined()
 
     const parsed = JSON.parse(toolsResponse!) as { result: { tools: { name: string }[] } }
-    expect(parsed.result.tools).toHaveLength(30)
+    expect(parsed.result.tools).toHaveLength(40)
 
     const names = parsed.result.tools.map(t => t.name)
+    // Frozen read + trading tools
     expect(names).toContain('health_check')
     expect(names).toContain('open_position')
     expect(names).toContain('preview_tp_sl')
@@ -90,5 +91,18 @@ describe.skipIf(!process.env.RUN_INTEGRATION)('MCP protocol', () => {
     expect(names).toContain('get_trading_overview')
     expect(names).toContain('place_trigger_order')
     expect(names).toContain('cancel_all_trigger_orders')
+    // New V2 primitives
+    expect(names).toContain('get_owner')
+    expect(names).toContain('get_tokens')
+    expect(names).toContain('init_basket')
+    expect(names).toContain('init_deposit_ledger')
+    expect(names).toContain('delegate_basket')
+    expect(names).toContain('deposit_direct')
+    expect(names).toContain('request_withdrawal')
+    expect(names).toContain('execute_withdrawal')
+    expect(names).toContain('place_tp_sl')
+    expect(names).toContain('edit_limit_order')
+    expect(names).toContain('cancel_limit_order')
+    expect(names).toContain('sign_and_send')
   })
 })

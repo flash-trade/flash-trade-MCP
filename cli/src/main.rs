@@ -1,534 +1,266 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// flash — a V2-only CLI for Flash Trade (MagicBlock Ephemeral Rollup perps).
+// Talks to the hosted V2 REST API for reads + unsigned transaction building,
+// signs locally, and routes each transaction to the correct chain (trading→ER,
+// setup/withdrawal→base). No SDK, no on-chain instruction building, no V1.
+// ─────────────────────────────────────────────────────────────────────────────
+
 use anyhow::Result;
 use clap::Parser;
 
-mod cli;
-mod commands;
-mod core;
-mod enrichment;
-mod error;
-mod output;
-
-use cli::{App, Command};
-use core::config::{Config, Settings};
-use core::wallet::WalletManager;
-use output::formatter::Formatter;
+use flash_cli::cli::{self, App, Command};
+use flash_cli::commands;
+use flash_cli::core::api::ApiClient;
+use flash_cli::core::config::{Config, Settings};
+use flash_cli::core::network::Network;
+use flash_cli::core::wallet::WalletManager;
 
 #[tokio::main]
 async fn main() -> Result<()> {
     let app = App::parse();
-    let settings = match Config::load() {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!(
-                "WARNING: Failed to load settings: {e}\n\
-                 Using defaults (public Solana RPC, no custom config).\n\
-                 Run `flash config list` to check your configuration."
-            );
-            Settings::default()
+
+    let settings = Config::load().unwrap_or_else(|e| {
+        eprintln!(
+            "WARNING: failed to load settings ({e}); using defaults. Run `flash config list` to inspect."
+        );
+        Settings::default()
+    });
+
+    // Two-chain network: API base + ER RPC + base RPC (env overrides, verified
+    // defaults). A configured settings.rpc_url stands in for the base RPC when no
+    // SOLANA_RPC_URL env override is set.
+    let mut net = Network::resolve();
+    if std::env::var("SOLANA_RPC_URL").is_err() {
+        if let Some(url) = &settings.rpc_url {
+            net.base_rpc = url.clone();
         }
-    };
+    }
 
-    let formatter = Formatter::new(app.format);
+    let api = ApiClient::new(&net);
+    let key = app.key.as_deref();
 
-    let effective_settings = if let Some(cluster) = &app.cluster {
-        let cluster_str = match cluster {
-            cli::Cluster::Mainnet => "mainnet-beta",
-            cli::Cluster::Devnet => "devnet",
-        };
-        let mut s = settings.clone();
-        s.cluster = cluster_str.to_string();
-        s
-    } else {
-        settings
-    };
-
-    run_command(
-        app.command,
-        &effective_settings,
-        &formatter,
-        app.key.as_deref(),
-    )
-    .await
+    match app.command {
+        Command::Health => commands::reads::health(&api).await,
+        Command::Tokens { symbol } => commands::reads::tokens(&api, symbol.as_deref()).await,
+        Command::Price { symbol, watch } => commands::reads::price(&api, &symbol, watch).await,
+        Command::Prices => commands::reads::prices(&api).await,
+        Command::Markets => commands::reads::markets(&api).await,
+        Command::Account { owner } => {
+            let owner = commands::resolve_owner(owner.as_deref(), key, &settings)?;
+            commands::reads::account(&api, &net, &owner).await
+        }
+        Command::Setup { command } => handle_setup(command, &api, &net, key, &settings).await,
+        Command::Perps { command } => handle_perps(command, &api, &net, key, &settings).await,
+        Command::Withdraw { command } => handle_withdraw(command, &api, &net, key, &settings).await,
+        Command::Keys { command } => handle_keys(command).await,
+        Command::Config { command } => handle_config(command).await,
+    }
 }
 
-async fn run_command(
-    command: Command,
+async fn handle_setup(
+    command: cli::SetupCommand,
+    api: &ApiClient,
+    net: &Network,
+    key: Option<&str>,
     settings: &Settings,
-    formatter: &Formatter,
-    key_override: Option<&str>,
 ) -> Result<()> {
+    use cli::SetupCommand::*;
     match command {
-        Command::Config { command } => handle_config(command, formatter).await,
-        Command::Keys { command } => handle_keys(command, formatter).await,
-        Command::Price { symbol, watch } => handle_price(&symbol, watch, settings, formatter).await,
-        Command::Version => {
-            println!("flash-cli v{}", env!("CARGO_PKG_VERSION"));
-            println!("flash-sdk v0.1.0");
-            println!("solana-sdk v2.2");
-            println!("anchor-lang v0.32.1");
-            Ok(())
+        Status { owner } => {
+            let owner = commands::resolve_owner(owner.as_deref(), key, settings)?;
+            commands::txn::setup_status(api, &owner).await
         }
-        Command::Perps { command } => {
-            handle_perps(command, key_override, settings, formatter).await
+        InitBasket { submit } => commands::txn::init_basket(api, net, submit, key, settings).await,
+        InitLedger { submit } => commands::txn::init_ledger(api, net, submit, key, settings).await,
+        Delegate { submit } => commands::txn::delegate(api, net, submit, key, settings).await,
+        Deposit { token, amount, submit } => {
+            commands::txn::deposit(api, net, &token, &amount, submit, key, settings).await
         }
-        Command::Orders { command } => {
-            handle_orders(command, key_override, settings, formatter).await
-        }
-        Command::Earn { command } => handle_earn(command, key_override, settings, formatter).await,
     }
 }
 
 async fn handle_perps(
     command: cli::PerpsCommand,
-    key_override: Option<&str>,
+    api: &ApiClient,
+    net: &Network,
+    key: Option<&str>,
     settings: &Settings,
-    formatter: &Formatter,
 ) -> Result<()> {
+    use cli::PerpsCommand::*;
     match command {
-        cli::PerpsCommand::Positions { address } => {
-            commands::positions::list_positions(
-                address.as_deref(),
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
+        Open { symbol, side, collateral_usd, leverage, collateral_token, submit } => {
+            commands::txn::open(api, net, &symbol, &side, &collateral_usd, &leverage, &collateral_token, submit, key, settings).await
         }
-        cli::PerpsCommand::Position { pubkey } => {
-            commands::positions::show_position(&pubkey, settings, formatter).await
+        Close { symbol, side, usd, withdraw_token, submit } => {
+            commands::txn::close(api, net, &symbol, &side, &usd, &withdraw_token, submit, key, settings).await
         }
-        cli::PerpsCommand::Markets { pool } => {
-            commands::markets::list_markets(pool.as_deref(), settings, formatter).await
+        Reverse { symbol, side, leverage, submit } => {
+            commands::txn::reverse(api, net, &symbol, &side, &leverage, submit, key, settings).await
         }
-        cli::PerpsCommand::Market { symbol } => {
-            commands::markets::show_market(&symbol, settings, formatter).await
+        AddCollateral { symbol, side, amount, token, submit } => {
+            commands::txn::add_collateral(api, net, &symbol, &side, &amount, &token, submit, key, settings).await
         }
-        cli::PerpsCommand::Portfolio => {
-            commands::portfolio::show_portfolio(key_override, settings, formatter).await
+        RemoveCollateral { symbol, side, usd, token, submit } => {
+            commands::txn::remove_collateral(api, net, &symbol, &side, &usd, &token, submit, key, settings).await
         }
-        cli::PerpsCommand::Open {
-            symbol,
-            side,
-            collateral_usd,
-            leverage,
-            collateral_token,
-            slippage,
-        } => {
-            commands::open_position::execute(
-                &symbol,
-                &side,
-                collateral_usd,
-                leverage,
-                &collateral_token,
-                slippage,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
+        TpSl { symbol, side, size, tp, sl, submit } => {
+            commands::txn::tp_sl(api, net, &symbol, &side, &size, tp.as_deref(), sl.as_deref(), submit, key, settings).await
         }
-        cli::PerpsCommand::Close {
-            position,
-            percent,
-            slippage,
-        } => {
-            commands::close_position::execute(
-                &position,
-                percent,
-                slippage,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
-        }
-        cli::PerpsCommand::Increase {
-            position,
-            usd_amount,
-            slippage,
-        } => {
-            commands::increase_size::execute(
-                &position,
-                usd_amount,
-                slippage,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
-        }
-        cli::PerpsCommand::Decrease {
-            position,
-            usd_amount,
-            slippage,
-        } => {
-            commands::decrease_size::execute(
-                &position,
-                usd_amount,
-                slippage,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
-        }
-        cli::PerpsCommand::AddCollateral { position, amount } => {
-            commands::add_collateral::execute(&position, amount, key_override, settings, formatter)
-                .await
-        }
-        cli::PerpsCommand::RemoveCollateral { position, amount } => {
-            commands::remove_collateral::execute(
-                &position,
-                amount,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
-        }
+        Trigger { command } => handle_trigger(command, api, net, key, settings).await,
+        Limit { command } => handle_limit(command, api, net, key, settings).await,
     }
 }
 
-async fn handle_orders(
-    command: cli::OrdersCommand,
-    key_override: Option<&str>,
+async fn handle_trigger(
+    command: cli::TriggerCommand,
+    api: &ApiClient,
+    net: &Network,
+    key: Option<&str>,
     settings: &Settings,
-    formatter: &Formatter,
 ) -> Result<()> {
+    use cli::TriggerCommand::*;
     match command {
-        cli::OrdersCommand::List { address } => {
-            commands::orders_view::list_orders(
-                address.as_deref(),
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
+        Place { symbol, side, price, size, stop_loss, submit } => {
+            commands::txn::trigger_place(api, net, &symbol, &side, &price, &size, stop_loss, submit, key, settings).await
         }
-        cli::OrdersCommand::Limit {
-            symbol,
-            side,
-            size_usd,
-            price,
-            leverage,
-            collateral_token,
-        } => {
-            commands::place_limit_order::execute(
-                &symbol,
-                &side,
-                size_usd,
-                price,
-                leverage,
-                &collateral_token,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
+        Edit { symbol, side, order_id, price, size, stop_loss, submit } => {
+            commands::txn::trigger_edit(api, net, &symbol, &side, order_id, &price, &size, stop_loss, submit, key, settings).await
         }
-        cli::OrdersCommand::EditLimit { order, price, size } => {
-            commands::edit_limit_order::execute(
-                &order,
-                price,
-                size,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
+        Cancel { symbol, side, order_id, stop_loss, submit } => {
+            commands::txn::trigger_cancel(api, net, &symbol, &side, order_id, stop_loss, submit, key, settings).await
         }
-        cli::OrdersCommand::Trigger {
-            position,
-            r#type,
-            price,
-            quantity,
-        } => {
-            commands::place_trigger_order::execute(
-                &position,
-                &r#type,
-                price,
-                quantity,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
-        }
-        cli::OrdersCommand::EditTrigger {
-            order,
-            price,
-            quantity,
-        } => {
-            commands::edit_trigger_order::execute(
-                &order,
-                price,
-                quantity,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
-        }
-        cli::OrdersCommand::Cancel { order, r#type } => {
-            let is_stop_loss = matches!(r#type, cli::orders::TriggerType::Sl);
-            commands::cancel_trigger_order::cancel_single(
-                &order, is_stop_loss, key_override, settings, formatter,
-            )
-            .await
-        }
-        cli::OrdersCommand::CancelAll { symbol } => {
-            commands::cancel_trigger_order::cancel_all(&symbol, key_override, settings, formatter)
-                .await
+        CancelAll { symbol, side, submit } => {
+            commands::txn::trigger_cancel_all(api, net, &symbol, &side, submit, key, settings).await
         }
     }
 }
 
-async fn handle_earn(
-    command: cli::EarnCommand,
-    key_override: Option<&str>,
+async fn handle_limit(
+    command: cli::LimitCommand,
+    api: &ApiClient,
+    net: &Network,
+    key: Option<&str>,
     settings: &Settings,
-    formatter: &Formatter,
 ) -> Result<()> {
+    use cli::LimitCommand::*;
     match command {
-        cli::EarnCommand::Pools => commands::pools::list_pools(settings, formatter).await,
-        cli::EarnCommand::Pool { name } => {
-            commands::pools::show_pool(&name, settings, formatter).await
+        Edit { symbol, side, order_id, price, size, submit } => {
+            commands::txn::limit_edit(api, net, &symbol, &side, order_id, price.as_deref(), size.as_deref(), submit, key, settings).await
         }
-        cli::EarnCommand::AddLiquidity {
-            pool,
-            token,
-            amount,
-        } => {
-            commands::add_liquidity::execute(
-                &pool,
-                &token,
-                amount,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
-        }
-        cli::EarnCommand::RemoveLiquidity {
-            pool,
-            token,
-            amount,
-        } => {
-            commands::remove_liquidity::execute(
-                &pool,
-                &token,
-                amount,
-                key_override,
-                settings,
-                formatter,
-            )
-            .await
-        }
-        cli::EarnCommand::Stake { pool, amount } => {
-            commands::stake::execute(&pool, amount, key_override, settings, formatter).await
-        }
-        cli::EarnCommand::Unstake {
-            pool,
-            amount,
-            instant,
-        } => {
-            commands::unstake::execute(&pool, amount, instant, key_override, settings, formatter)
-                .await
-        }
-        cli::EarnCommand::Claim { pool } => {
-            commands::collect_fees::execute(&pool, key_override, settings, formatter).await
-        }
-        cli::EarnCommand::Stakes { address } => {
-            // Stakes view — uses positions-like RPC query for stake accounts
-            println!("Stakes view not yet implemented (requires FLP stake account parsing)");
-            let _ = address;
-            Ok(())
+        Cancel { symbol, side, order_id, submit } => {
+            commands::txn::limit_cancel(api, net, &symbol, &side, order_id, submit, key, settings).await
         }
     }
 }
 
-async fn handle_config(command: cli::ConfigCommand, formatter: &Formatter) -> Result<()> {
+async fn handle_withdraw(
+    command: cli::WithdrawCommand,
+    api: &ApiClient,
+    net: &Network,
+    key: Option<&str>,
+    settings: &Settings,
+) -> Result<()> {
+    use cli::WithdrawCommand::*;
     match command {
-        cli::ConfigCommand::List => {
-            use crate::core::config::redact_url;
-            let settings = Config::load()?;
-            let fallbacks_display = if settings.rpc_fallbacks.is_empty() {
-                "(none)".to_string()
-            } else {
-                settings.rpc_fallbacks.iter().map(|u| redact_url(u)).collect::<Vec<_>>().join(", ")
-            };
-            let pairs = vec![
-                ("active_key".to_string(), settings.active_key),
-                ("output_format".to_string(), settings.output_format),
-                ("cluster".to_string(), settings.cluster),
-                (
-                    "rpc_url".to_string(),
-                    settings
-                        .rpc_url
-                        .as_deref()
-                        .map(redact_url)
-                        .unwrap_or_else(|| "(default)".to_string()),
-                ),
-                (
-                    "default_slippage_bps".to_string(),
-                    settings.default_slippage_bps.to_string(),
-                ),
-                ("commitment".to_string(), settings.commitment),
-                (
-                    "priority_fee".to_string(),
-                    settings.priority_fee.to_string(),
-                ),
-                (
-                    "rpc_failover".to_string(),
-                    if settings.rpc_failover { "on" } else { "off" }.to_string(),
-                ),
-                ("rpc_fallbacks".to_string(), fallbacks_display),
-            ];
-            println!("{}", formatter.settings(&pairs));
+        Request { token, amount, submit } => {
+            commands::txn::withdraw_request(api, net, &token, &amount, submit, key, settings).await
         }
-        cli::ConfigCommand::Set { key, value } => {
-            Config::set(&key, &value)?;
-            // Redact API keys in URLs when echoing back to the user
-            let display_value = match key.as_str() {
-                "rpc_url" | "rpc_fallbacks" | "pool_config_url" => {
-                    use crate::core::config::redact_url;
-                    redact_url(&value)
-                }
-                _ => value,
-            };
-            println!("{}", formatter.success(&format!("Set {key} = {display_value}")));
-        }
-        cli::ConfigCommand::Reset => {
-            Config::reset()?;
-            println!("{}", formatter.success("Settings reset to defaults"));
+        Execute { token, submit } => {
+            commands::txn::withdraw_execute(api, net, &token, submit, key, settings).await
         }
     }
-    Ok(())
 }
 
-async fn handle_keys(command: cli::KeysCommand, formatter: &Formatter) -> Result<()> {
+async fn handle_keys(command: cli::KeysCommand) -> Result<()> {
+    use cli::KeysCommand::*;
     match command {
-        cli::KeysCommand::List => {
+        List => {
             let names = WalletManager::list()?;
             if names.is_empty() {
-                println!(
-                    "{}",
-                    formatter.success(
-                        "No keypairs found. Run `flash keys generate <name>` to create one."
-                    )
-                );
+                println!("No keypairs found. Run `flash keys generate <name>` to create one.");
                 return Ok(());
             }
-            let mut pairs = Vec::new();
+            let active = Config::load().map(|s| s.active_key).unwrap_or_default();
             for name in &names {
                 let pubkey = WalletManager::pubkey_for(name)
                     .map(|pk| pk.to_string())
                     .unwrap_or_else(|_| "(error reading)".to_string());
-                pairs.push((name.clone(), pubkey));
+                let marker = if *name == active { "*" } else { " " };
+                println!("{marker} {name:<16} {pubkey}");
             }
-            println!("{}", formatter.keys(&pairs));
+            println!("\n(* = active key. Set with `flash keys use <name>`.)");
         }
-        cli::KeysCommand::Add {
-            name,
-            file,
-            private_key,
-        } => {
-            if let Some(path) = file {
-                WalletManager::import_file(&name, std::path::Path::new(&path))?;
-            } else if private_key.is_some() {
-                // Read key from stdin — never from CLI arg (shell history exposure)
-                eprint!("Enter base58-encoded private key: ");
-                std::io::Write::flush(&mut std::io::stderr())?;
-                let mut key_input = String::new();
-                std::io::stdin().read_line(&mut key_input)?;
-                let key = key_input.trim();
-                if key.is_empty() {
-                    anyhow::bail!("No private key provided");
-                }
-                WalletManager::import_private_key(&name, key)?;
-            } else {
-                WalletManager::import_solana_default(&name)?;
+        Generate { name } => {
+            let pubkey = WalletManager::generate(&name)?;
+            println!("Generated keypair '{name}': {pubkey}");
+            println!(
+                "WARNING: keys are stored UNENCRYPTED under {}. Fund only what you can afford to lose.",
+                Config::keys_dir().display()
+            );
+        }
+        Add { name, file } => {
+            match file {
+                Some(path) => WalletManager::import_file(&name, std::path::Path::new(&path))?,
+                None => WalletManager::import_solana_default(&name)?,
             }
             let pubkey = WalletManager::pubkey_for(&name)?;
-            println!(
-                "{}",
-                formatter.success(&format!("Imported keypair '{name}': {pubkey}"))
-            );
+            println!("Imported keypair '{name}': {pubkey}");
         }
-        cli::KeysCommand::Delete { name } => {
+        Delete { name } => {
             WalletManager::delete(&name)?;
-            println!(
-                "{}",
-                formatter.success(&format!("Deleted keypair '{name}'"))
-            );
+            println!("Deleted keypair '{name}'");
         }
-        cli::KeysCommand::Use { name } => {
+        Use { name } => {
             if !WalletManager::exists(&name) {
-                anyhow::bail!(
-                    "Keypair '{name}' not found. Run `flash keys list` to see available keys."
-                );
+                anyhow::bail!("Keypair '{name}' not found. Run `flash keys list` to see available keys.");
             }
             Config::set("active_key", &name)?;
-            println!(
-                "{}",
-                formatter.success(&format!("Active keypair set to '{name}'"))
-            );
+            println!("Active keypair set to '{name}'");
         }
-        cli::KeysCommand::Show { name } => {
+        Show { name } => {
             let pubkey = WalletManager::pubkey_for(&name)?;
-            println!("{}", formatter.success(&format!("{pubkey}")));
-        }
-        cli::KeysCommand::Generate { name } => {
-            let pubkey = WalletManager::generate(&name)?;
-            println!(
-                "{}",
-                formatter.success(&format!("Generated keypair '{name}': {pubkey}"))
-            );
+            println!("{pubkey}");
         }
     }
     Ok(())
 }
 
-async fn handle_price(
-    symbol: &str,
-    watch: bool,
-    settings: &Settings,
-    formatter: &Formatter,
-) -> Result<()> {
-    let configs = core::pool_config::PoolConfigManager::load(settings)?;
-    let token = core::pool_config::PoolConfigManager::find_token(&configs, symbol)?;
-
-    if settings.cluster == "devnet" {
-        eprintln!("Warning: Pyth prices are mainnet-only. Devnet prices may be stale or zero.");
-    }
-
-    let price_client = core::prices::PriceClient::new();
-
-    loop {
-        let price_data = price_client.get_price(&token.pyth_price_id).await?;
-
-        if price_data.is_stale() {
-            eprintln!(
-                "Warning: Price for {symbol} is stale ({}s old)",
-                price_data.staleness_seconds()
+async fn handle_config(command: cli::ConfigCommand) -> Result<()> {
+    use cli::ConfigCommand::*;
+    use flash_cli::core::config::redact_url;
+    match command {
+        List => {
+            let settings = Config::load()?;
+            println!("=== settings ===");
+            println!("active_key            {}", settings.active_key);
+            println!("output_format         {}", settings.output_format);
+            println!("cluster               {}", settings.cluster);
+            println!(
+                "rpc_url               {}",
+                settings.rpc_url.as_deref().map(redact_url).unwrap_or_else(|| "(default)".to_string())
             );
-        }
+            println!("default_slippage_bps  {}", settings.default_slippage_bps);
+            println!("commitment            {}", settings.commitment);
+            println!("priority_fee          {}", settings.priority_fee);
 
-        println!(
-            "{}",
-            formatter.price(
-                symbol,
-                price_data.price,
-                price_data.confidence,
-                price_data.staleness_seconds()
-            )
-        );
-
-        if !watch {
-            break;
+            let net = Network::resolve();
+            println!("\n=== network (env: FLASH_API_URL / ER_RPC_URL / SOLANA_RPC_URL) ===");
+            println!("api_base   {}", net.api_base);
+            println!("er_rpc     {}   (trading)", net.er_rpc);
+            println!("base_rpc   {}   (setup + withdrawal)", redact_url(&net.base_rpc));
         }
-        tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+        Set { key, value } => {
+            Config::set(&key, &value)?;
+            let display = match key.as_str() {
+                "rpc_url" | "rpc_fallbacks" => redact_url(&value),
+                _ => value,
+            };
+            println!("Set {key} = {display}");
+        }
+        Reset => {
+            Config::reset()?;
+            println!("Settings reset to defaults");
+        }
     }
-
     Ok(())
 }

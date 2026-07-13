@@ -31,7 +31,7 @@ flash price SOL --watch          # one symbol, refreshing every 5s
 flash markets                    # symbol / side / max leverage / open interest / pool
 flash tokens                     # symbols + MINT addresses (deposits need mints)
 
-# A free quote — no wallet required (omit the key and it stays quote-only):
+# A free quote — no wallet needed (`--key none` = no real key, so it stays quote-only):
 flash --key none perps open SOL long 11 5
 
 # Import a wallet to sign:

@@ -6,6 +6,7 @@ import { FlashApiClient } from './client/flash-api.ts'
 import { registerReadTools, registerTransactionTools, registerPreviewTools } from './tools/index.ts'
 import { registerResources } from './resources/index.ts'
 import { sanitizeError } from './sanitize.ts'
+import pkg from '../package.json' with { type: 'json' }
 
 process.on('uncaughtException', (err) => {
   console.error('[flash-trade-mcp] Uncaught exception:', sanitizeError(err))
@@ -22,7 +23,7 @@ try {
 
   const server = new McpServer({
     name: 'flash-trade',
-    version: '1.0.0',
+    version: pkg.version,
   }, {
     capabilities: { tools: {}, resources: {} },
   })

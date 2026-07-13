@@ -188,10 +188,10 @@ The spread is still real money at the fills (§21) — it just doesn't belong in
 
 ## 7. npm / release plan
 
-- **Version:** `flash-trade-mcp` `0.4.1 → 1.0.0`. Tool **names** are preserved for existing consumers, but the request/response shapes, env vars (`ER_RPC_URL` added; `sign_and_send` now requires `network`), and default base URL change — a major bump is honest. `flash-cli` `0.1.0 → 1.0.0` in lockstep (also resolves the 0.1.0-vs-"v0.2.0" git-log drift).
+- **Version:** `flash-trade-mcp` `0.4.1 → 0.5.0`. Tool **names** are preserved for existing consumers, but the request/response shapes, env vars (`ER_RPC_URL` added; `sign_and_send` now requires `network`), and default base URL change. The rewrite is breaking, but the package stays **pre-1.0** while the V2 surface settles: under semver a breaking change before 1.0 bumps the minor (`0.4 → 0.5`), which keeps room to iterate without yet promising a stable public API. `flash-cli` moves to `0.5.0` in lockstep (also resolves the 0.1.0-vs-"v0.2.0" git-log drift). Adopt `1.0.0` later as a deliberate "V2 is stable" milestone.
 - **Changelog:** "V2-only rewrite — MagicBlock ER, baskets + deposit ledger, two-chain routing, four error channels. Breaking: request/response shapes, `sign_and_send` `network` arg, `ER_RPC_URL` env, root base URL default."
 - **SDK pin:** `@modelcontextprotocol/sdk` stays on `^1.27.1` (current stable 1.29.0). The v2-alpha `@modelcontextprotocol/server` migration (raw shapes → wrapped schema objects) is noted as future work.
-- **Release workflow (unchanged, gated):** merge `feat/v2-only` → CI green (typecheck + tests + build) → tag `v1.0.0` → `.github/workflows/publish.yml` publishes to npm via OIDC provenance. **Merge, tag, and publish are Kaleb's actions.**
+- **Release workflow (unchanged, gated):** merge `feat/v2-only` → CI green (typecheck + tests + build) → tag `v0.5.0` → `.github/workflows/publish.yml` publishes to npm via OIDC provenance. **Merge, tag, and publish are Kaleb's actions.**
 
 ---
 

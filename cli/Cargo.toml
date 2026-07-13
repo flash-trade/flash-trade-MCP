@@ -1,6 +1,6 @@
 [package]
 name = "flash-cli"
-version = "1.0.0"
+version = "0.5.0"
 edition = "2021"
 description = "CLI for Flash Trade V2 (MagicBlock Ephemeral Rollup) — REST client with local signing and two-chain routing"
 

@@ -100,8 +100,8 @@ Publishing is **not automatic on merge**. It only happens when you push a versio
 ```bash
 # 1. Bump version in mcp/package.json (in a PR, merge it)
 # 2. Tag the merge commit on main:
-git tag v1.0.0
-git push origin v1.0.0
+git tag v0.5.0
+git push origin v0.5.0
 # 3. The publish workflow triggers automatically → builds → publishes to NPM
 ```
 

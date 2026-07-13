@@ -1,10 +1,15 @@
 import { z } from 'zod'
+import { zPubkey, zSide } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import type { OpenPositionResponse } from '../client/types.ts'
 import { txFooter } from './shared/tx.ts'
+import { estimateLiqPrice, fmtPrice, num } from './shared/format.ts'
 
 function formatPreview(req: { outputTokenSymbol: string; tradeType: string; inputTokenSymbol: string }, res: OpenPositionResponse): string {
+  // Liquidation computed client-side from the quote (entry/size/collateral) — the
+  // builder's newLiquidationPrice is spread-distorted on env=dev (GOTCHAS §20).
+  const liq = estimateLiqPrice(req.tradeType === 'LONG', num(res.newEntryPrice), num(res.youRecieveUsdUi), num(res.youPayUsdUi))
   const lines = [
     '=== Open Position Preview ===',
     `Market: ${req.outputTokenSymbol}/USD ${req.tradeType}`,
@@ -12,7 +17,7 @@ function formatPreview(req: { outputTokenSymbol: string; tradeType: string; inpu
     `Effective Size: $${res.youRecieveUsdUi} (${res.outputAmountUi} ${req.outputTokenSymbol})`,
     `Collateral: $${res.youPayUsdUi} ${req.inputTokenSymbol}`,
     `Leverage: ${res.newLeverage}x`,
-    `Liquidation Price: $${res.newLiquidationPrice}`,
+    `Liquidation Price (est.): ${fmtPrice(liq)}`,
     `Entry Fee: $${res.entryFee} (${res.openPositionFeePercent}%)`,
     `Hourly Borrow Rate: ${res.marginFeePercentage}%`,
     `Available Liquidity: $${res.availableLiquidity}`,
@@ -37,8 +42,8 @@ export function registerOpenPositionTool(server: McpServer, client: FlashApiClie
       output_token_symbol: z.string().max(16).describe('Market symbol to trade: "SOL", "BTC", "ETH", etc.'),
       input_amount: z.string().max(32).describe('Collateral amount in UI units, e.g. "11.0"'),
       leverage: z.string().max(8).describe('Leverage multiplier, e.g. "5.0"'),
-      trade_type: z.enum(['LONG', 'SHORT']).describe('Trade direction'),
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional().describe('Wallet pubkey — OMIT for a free quote, include to build the transaction'),
+      trade_type: zSide.describe('Trade direction'),
+      owner: zPubkey.optional().describe('Wallet pubkey — OMIT for a free quote, include to build the transaction'),
       order_type: z.enum(['MARKET', 'LIMIT']).optional().describe('Default: MARKET'),
       limit_price: z.string().max(32).optional().describe('Required for LIMIT orders (UI price)'),
       slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),

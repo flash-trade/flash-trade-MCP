@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { zPubkey } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { SETUP_STEPS } from './owner.ts'
@@ -10,7 +11,7 @@ export function registerBasketTools(server: McpServer, client: FlashApiClient) {
       'positions and orders. Get the basket PDA from get_owner (basketPubkey); if get_owner shows no basket, ' +
       'the account is not set up yet. ' + SETUP_STEPS,
     inputSchema: {
-      basket_pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Basket PDA (from get_owner → basketPubkey)'),
+      basket_pubkey: zPubkey.describe('Basket PDA (from get_owner → basketPubkey)'),
     },
   }, async ({ basket_pubkey }) => {
     const basket = await client.getBasket(basket_pubkey)

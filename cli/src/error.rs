@@ -1,17 +1,7 @@
 use thiserror::Error;
 
 #[derive(Error, Debug)]
-#[allow(dead_code)]
 pub enum FlashCliError {
-    #[error("Config not found: run `flash config reset` to create defaults")]
-    ConfigNotFound,
-
-    #[error("Keypair '{0}' not found in keystore")]
-    KeyNotFound(String),
-
-    #[error("No active keypair set. Run `flash keys use <name>` or `flash keys generate default`")]
-    NoActiveKey,
-
     // ── Four API error channels (see V2-ALIGNMENT.md §3) ──
     #[error("[body-err] {0}: {1}")]
     ApiBodyErr(String, String),
@@ -29,16 +19,6 @@ pub enum FlashCliError {
 
     #[error("Transaction send failed on {0}: {1}")]
     SendFailed(String, String),
-
-    // Boxed: ClientError is large; inlining it bloats every FlashCliError value.
-    #[error("RPC error: {0}")]
-    Rpc(#[from] Box<solana_client::client_error::ClientError>),
-
-    #[error("HTTP error: {0}")]
-    Http(#[from] reqwest::Error),
-
-    #[error("IO error: {0}")]
-    Io(#[from] std::io::Error),
 
     #[error("{0}")]
     Other(String),

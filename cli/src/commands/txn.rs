@@ -8,12 +8,14 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 use crate::core::api::ApiClient;
+use crate::core::compute;
 use crate::core::config::Settings;
+use crate::core::json::str_field as sv;
 use crate::core::network::Network;
 use crate::core::wallet::WalletManager;
 use crate::output::colors::format_price;
 use anyhow::{anyhow, Result};
-use serde_json::{json, Value};
+use serde_json::json;
 use solana_sdk::signer::Signer;
 
 use super::{handle_built, resolve_owner};
@@ -25,11 +27,6 @@ fn norm_side(side: &str) -> Result<&'static str> {
         "short" | "s" => Ok("SHORT"),
         _ => Err(anyhow!("side must be 'long' or 'short' (got '{side}')")),
     }
-}
-
-/// String field accessor for API response Values.
-fn sv<'a>(v: &'a Value, key: &str) -> &'a str {
-    v.get(key).and_then(|x| x.as_str()).unwrap_or("")
 }
 
 /// Resolve the owner pubkey from the active/override key WITHOUT erroring when no
@@ -164,7 +161,15 @@ pub async fn open(
     println!("Effective size:     ${} ({} {})", sv(&res, "youRecieveUsdUi"), sv(&res, "outputAmountUi"), symbol.to_uppercase());
     println!("Collateral:         ${} {}", sv(&res, "youPayUsdUi"), collateral_token.to_uppercase());
     println!("Leverage:           {}x", sv(&res, "newLeverage"));
-    println!("Liquidation price:  ${}", sv(&res, "newLiquidationPrice"));
+    // Liquidation computed client-side from the quote — the builder's value is
+    // spread-distorted on env=dev (GOTCHAS §20).
+    let liq = compute::estimate_liq(
+        trade_type == "LONG",
+        sv(&res, "newEntryPrice").parse().unwrap_or(0.0),
+        sv(&res, "youRecieveUsdUi").parse().unwrap_or(0.0),
+        sv(&res, "youPayUsdUi").parse().unwrap_or(0.0),
+    );
+    println!("Liquidation (est.): {}", format_price(liq));
     println!("Entry fee:          ${} ({}%)", sv(&res, "entryFee"), sv(&res, "openPositionFeePercent"));
     println!("Hourly borrow rate: {}%", sv(&res, "marginFeePercentage"));
     println!("Available liquidity:${}", sv(&res, "availableLiquidity"));
@@ -251,7 +256,13 @@ pub async fn reverse(
     println!("Close proceeds: ${} | Close fees: ${} | Settled PnL: ${}", sv(&res, "closeReceiveUsd"), sv(&res, "closeFees"), sv(&res, "closeSettledPnl"));
     println!("New {}: ${} ({}) @ ${}, {}x", sv(&res, "newSide"), sv(&res, "newSizeUsd"), sv(&res, "newSizeAmountUi"), sv(&res, "newEntryPrice"), sv(&res, "newLeverage"));
     println!("New collateral (post-2% haircut): ${} | Open fee: ${}", sv(&res, "newCollateralUsd"), sv(&res, "openEntryFee"));
-    println!("New liquidation: ${}", sv(&res, "newLiquidationPrice"));
+    let liq = compute::estimate_liq(
+        sv(&res, "newSide") == "Long",
+        sv(&res, "newEntryPrice").parse().unwrap_or(0.0),
+        sv(&res, "newSizeUsd").parse().unwrap_or(0.0),
+        sv(&res, "newCollateralUsd").parse().unwrap_or(0.0),
+    );
+    println!("New liquidation (est.): {}", format_price(liq));
     handle_built(net, "reverse-position", &res, submit, key_override, settings)
 }
 
@@ -285,7 +296,7 @@ pub async fn add_collateral(
     println!("=== Add Collateral — {trade_type} {} ===", symbol.to_uppercase());
     println!("Collateral:  ${} -> ${}", sv(&res, "existingCollateralUsd"), sv(&res, "newCollateralUsd"));
     println!("Leverage:    {}x -> {}x", sv(&res, "existingLeverage"), sv(&res, "newLeverage"));
-    println!("Liquidation: ${} -> ${}", sv(&res, "existingLiquidationPrice"), sv(&res, "newLiquidationPrice"));
+    println!("Liquidation (est.): ${} -> ${}", sv(&res, "existingLiquidationPrice"), sv(&res, "newLiquidationPrice"));
     println!("Deposit value: ${} (max addable ${})", sv(&res, "depositUsdValue"), sv(&res, "maxAddableUsd"));
     handle_built(net, "add-collateral", &res, submit, key_override, settings)
 }
@@ -320,7 +331,7 @@ pub async fn remove_collateral(
     println!("=== Remove Collateral — {trade_type} {} ===", symbol.to_uppercase());
     println!("Collateral:  ${} -> ${}", sv(&res, "existingCollateralUsd"), sv(&res, "newCollateralUsd"));
     println!("Leverage:    {}x -> {}x", sv(&res, "existingLeverage"), sv(&res, "newLeverage"));
-    println!("Liquidation: ${} -> ${}", sv(&res, "existingLiquidationPrice"), sv(&res, "newLiquidationPrice"));
+    println!("Liquidation (est.): ${} -> ${}", sv(&res, "existingLiquidationPrice"), sv(&res, "newLiquidationPrice"));
     println!("Receive:     {} (${}) | max withdrawable ${}", sv(&res, "receiveAmountUi"), sv(&res, "receiveAmountUsdUi"), sv(&res, "maxWithdrawableUsd"));
     handle_built(net, "remove-collateral", &res, submit, key_override, settings)
 }

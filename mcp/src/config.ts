@@ -33,26 +33,43 @@ export interface FlashMcpConfig {
   keypairPath: string
 }
 
-export function loadConfig(): FlashMcpConfig {
-  const apiBaseUrl = process.env.FLASH_API_URL ?? DEFAULTS.apiBaseUrl
-
+/**
+ * Resolve an endpoint URL and ENFORCE https:// (localhost/127.0.0.1 exempt for
+ * local dev). Plaintext is rejected, not merely warned: over http a network
+ * attacker can substitute the very transaction sign_and_send will sign, so the
+ * whole trust model collapses. Returns the URL with any trailing slash removed.
+ */
+function resolveEndpoint(name: string, value: string): string {
   let parsed: URL
   try {
-    parsed = new URL(apiBaseUrl)
+    parsed = new URL(value)
   } catch {
-    throw new Error(`FLASH_API_URL is not a valid URL: ${apiBaseUrl}`)
+    throw new Error(`${name} is not a valid URL: ${value}`)
   }
-  if (parsed.protocol !== 'https:' && parsed.hostname !== 'localhost' && parsed.hostname !== '127.0.0.1') {
-    console.error(`[flash-trade-mcp] WARNING: FLASH_API_URL uses ${parsed.protocol} — HTTPS is strongly recommended for production`)
+  const isLoopback = parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1'
+  if (parsed.protocol !== 'https:' && !isLoopback) {
+    throw new Error(
+      `${name} must use https:// (got "${parsed.protocol}//"). Plaintext endpoints let a network ` +
+        `attacker substitute the transaction you sign. Only localhost/127.0.0.1 are exempt.`,
+    )
   }
+  return value.replace(/\/$/, '')
+}
 
+export function loadConfig(): FlashMcpConfig {
   const home = process.env.HOME ?? process.env.USERPROFILE ?? ''
 
+  // Timeout: guard against a non-numeric FLASH_API_TIMEOUT, which would otherwise
+  // become AbortSignal.timeout(NaN) and abort every request instantly.
+  const timeoutRaw = process.env.FLASH_API_TIMEOUT
+  const timeoutNum = timeoutRaw !== undefined ? Number(timeoutRaw) : NaN
+  const timeoutMs = Number.isFinite(timeoutNum) && timeoutNum > 0 ? timeoutNum : DEFAULTS.timeoutMs
+
   return {
-    apiBaseUrl: apiBaseUrl.replace(/\/$/, ''),
-    erRpcUrl: (process.env.ER_RPC_URL ?? DEFAULTS.erRpcUrl).replace(/\/$/, ''),
-    baseRpcUrl: (process.env.SOLANA_RPC_URL ?? DEFAULTS.baseRpcUrl).replace(/\/$/, ''),
-    timeoutMs: parseInt(process.env.FLASH_API_TIMEOUT ?? String(DEFAULTS.timeoutMs), 10),
+    apiBaseUrl: resolveEndpoint('FLASH_API_URL', process.env.FLASH_API_URL ?? DEFAULTS.apiBaseUrl),
+    erRpcUrl: resolveEndpoint('ER_RPC_URL', process.env.ER_RPC_URL ?? DEFAULTS.erRpcUrl),
+    baseRpcUrl: resolveEndpoint('SOLANA_RPC_URL', process.env.SOLANA_RPC_URL ?? DEFAULTS.baseRpcUrl),
+    timeoutMs,
     walletPubkey: process.env.WALLET_PUBKEY,
     keypairPath: process.env.KEYPAIR_PATH ?? (home ? `${home}/.config/solana/id.json` : '.config/solana/id.json'),
   }

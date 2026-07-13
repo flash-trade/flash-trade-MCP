@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { zPubkey } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 
@@ -13,7 +14,7 @@ export function registerCustodyTools(server: McpServer, client: FlashApiClient) 
   server.registerTool('get_custody', {
     description: 'Get the raw Anchor-decoded account for one custody by pubkey.',
     inputSchema: {
-      pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Custody account pubkey'),
+      pubkey: zPubkey.describe('Custody account pubkey'),
     },
   }, async ({ pubkey }) => {
     const custody = await client.getCustody(pubkey)

@@ -60,16 +60,45 @@ export function registerSignAndSendTool(server: McpServer, config: FlashMcpConfi
       return { content: [{ type: 'text' as const, text: `Failed to load keypair from ${keypairPath}: ${sanitizeError(e)}` }], isError: true }
     }
 
-    // Decode + sign. V2 txs are PARTIALLY SIGNED — the server pre-filled its
-    // signer slots and chose the blockhash. We add ONLY the owner signature and
-    // NEVER replace the blockhash (that would invalidate the server's signatures).
+    const owner = keypair.publicKey.toBase58()
+    // Operator guard: if WALLET_PUBKEY is declared, the loaded keypair MUST be it.
+    // Catches a wrong KEYPAIR_PATH before any signing happens.
+    if (config.walletPubkey && config.walletPubkey !== owner) {
+      return { content: [{ type: 'text' as const, text: `Refusing to sign: the loaded keypair (${owner}) does not match WALLET_PUBKEY (${config.walletPubkey}). Check KEYPAIR_PATH.` }], isError: true }
+    }
+
+    // Decode. V2 txs are PARTIALLY SIGNED — the server pre-filled its signer slots
+    // and chose the blockhash. We add ONLY the owner signature and NEVER replace the
+    // blockhash (that would invalidate the server's signatures).
     let tx: VersionedTransaction
     try {
       tx = VersionedTransaction.deserialize(Buffer.from(transaction_base64, 'base64'))
     } catch (e) {
       return { content: [{ type: 'text' as const, text: `Failed to decode transaction: ${sanitizeError(e)}` }], isError: true }
     }
-    tx.sign([keypair])
+
+    // Anti-substitution guard (opt-in via WALLET_PUBKEY): the transaction must pay
+    // from your wallet. Refuses a tx built for a different account. NOTE: this is a
+    // mismatch guard, NOT a full anti-drain check — a hostile tx that keeps you as
+    // fee payer can still move funds, so always review the preview before signing.
+    if (config.walletPubkey) {
+      const feePayer = tx.message.staticAccountKeys[0]?.toBase58()
+      if (feePayer !== config.walletPubkey) {
+        return { content: [{ type: 'text' as const, text: `Refusing to sign: the transaction's fee-payer (${feePayer}) is not your wallet (${config.walletPubkey}) — it was built for a different account.` }], isError: true }
+      }
+    }
+
+    // Sign in its OWN try/catch so a "not a required signer" error surfaces the
+    // wrong-wallet hint instead of throwing uncaught.
+    try {
+      tx.sign([keypair])
+    } catch (e) {
+      const msg = sanitizeError(e)
+      const hint = /Cannot sign with non signer key/i.test(msg)
+        ? '\n\nThe transaction was built for a different wallet than the local keypair. Re-build it with the matching owner, then sign.'
+        : ''
+      return { content: [{ type: 'text' as const, text: `Failed to sign transaction: ${msg}${hint}` }], isError: true }
+    }
 
     const connection = new Connection(rpcUrl, 'confirmed')
     try {
@@ -90,8 +119,6 @@ export function registerSignAndSendTool(server: McpServer, config: FlashMcpConfi
         hint = '\n\nThis is 0xbc4 / AccountNotInitialized(settlement_receipt) — settlement has NOT crossed from the rollup yet. This is a TIMING state, not a failure: wait ~30–90s after request_withdrawal, then re-call execute_withdrawal + sign_and_send. Execute is safely retryable.'
       } else if (/Blockhash not found|block height exceeded/i.test(msg)) {
         hint = '\n\nThe blockhash expired (~60s). Re-call the original transaction tool for a fresh transaction, then sign_and_send immediately.'
-      } else if (/Cannot sign with non signer key/i.test(msg)) {
-        hint = '\n\nThe transaction was built for a different wallet than the local keypair. Re-build it with the matching owner, then sign immediately.'
       } else if (/on-chain error/i.test(msg)) {
         hint = `\n\nDouble-check you passed the correct network ("${network}") — a trading tx submitted to base (or vice-versa) fails here.`
       }

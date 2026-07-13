@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { zPubkey, zSide } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { txFooter } from './shared/tx.ts'
@@ -11,10 +12,10 @@ export function registerClosePositionTool(server: McpServer, client: FlashApiCli
       'Returns settlement preview + the unsigned transaction.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL"'),
-      side: z.enum(['LONG', 'SHORT']).describe('Side of the position being closed'),
+      side: zSide.describe('Side of the position being closed'),
       input_usd: z.string().max(32).describe('USD notional to close; "0" = full close'),
       withdraw_token_symbol: z.string().max(16).describe('Settlement token symbol, e.g. "USDC"'),
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (required)'),
+      owner: zPubkey.describe('Wallet pubkey (required)'),
       slippage_percentage: z.string().max(8).optional().describe('Default: "0.5"'),
     },
   }, async (params) => {

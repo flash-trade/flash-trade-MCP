@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { zPubkey } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import type { PositionMetrics } from '../client/types.ts'
@@ -13,7 +14,7 @@ export function registerAccountSummaryTool(server: McpServer, client: FlashApiCl
       'snapshot. NOTE: this shows collateral deployed in positions; the free deposit-ledger balance is a separate ER ' +
       'account (see get_tokens / the app) — this tool does not fabricate a spend balance.',
     inputSchema: {
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey'),
+      owner: zPubkey.describe('Wallet pubkey'),
     },
   }, async ({ owner }) => {
     const [snapshot, prices] = await Promise.all([client.getOwner(owner), client.getPrices().catch(() => null)])

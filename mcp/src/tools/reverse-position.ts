@@ -1,7 +1,9 @@
 import { z } from 'zod'
+import { zPubkey, zSide } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { txFooter } from './shared/tx.ts'
+import { estimateLiqPrice, fmtPrice, num } from './shared/format.ts'
 
 export function registerReversePositionTool(server: McpServer, client: FlashApiClient) {
   server.registerTool('reverse_position', {
@@ -11,9 +13,9 @@ export function registerReversePositionTool(server: McpServer, client: FlashApiC
       'before sizing the new side — newCollateralUsd in the response is post-haircut.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL"'),
-      side: z.enum(['LONG', 'SHORT']).describe('CURRENT side (the new position will be the opposite)'),
+      side: zSide.describe('CURRENT side (the new position will be the opposite)'),
       leverage: z.string().max(8).describe('Leverage for the NEW side, e.g. "5.0"'),
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey'),
+      owner: zPubkey.describe('Wallet pubkey'),
       slippage_percentage: z.string().max(8).optional().describe('Default: "0.5"'),
     },
   }, async (params) => {
@@ -29,7 +31,7 @@ export function registerReversePositionTool(server: McpServer, client: FlashApiC
       `Close proceeds: $${res.closeReceiveUsd} | Close fees: $${res.closeFees} | Settled PnL: $${res.closeSettledPnl}`,
       `New ${res.newSide}: $${res.newSizeUsd} (${res.newSizeAmountUi}) @ $${res.newEntryPrice}, ${res.newLeverage}x`,
       `New collateral (post-2% haircut): $${res.newCollateralUsd} | Open fee: $${res.openEntryFee}`,
-      `New liquidation: $${res.newLiquidationPrice}`,
+      `New liquidation (est.): ${fmtPrice(estimateLiqPrice(res.newSide === 'Long', num(res.newEntryPrice), num(res.newSizeUsd), num(res.newCollateralUsd)))}`,
     ]
     return { content: [{ type: 'text' as const, text: lines.join('\n') + txFooter('reverse-position', res.transactionBase64) }] }
   })

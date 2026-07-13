@@ -12,7 +12,7 @@ use flash_cli::cli::{self, App, Command};
 use flash_cli::commands;
 use flash_cli::core::api::ApiClient;
 use flash_cli::core::config::{Config, Settings};
-use flash_cli::core::network::Network;
+use flash_cli::core::network::{self, Network};
 use flash_cli::core::wallet::WalletManager;
 
 #[tokio::main]
@@ -29,10 +29,10 @@ async fn main() -> Result<()> {
     // Two-chain network: API base + ER RPC + base RPC (env overrides, verified
     // defaults). A configured settings.rpc_url stands in for the base RPC when no
     // SOLANA_RPC_URL env override is set.
-    let mut net = Network::resolve();
+    let mut net = Network::resolve()?;
     if std::env::var("SOLANA_RPC_URL").is_err() {
         if let Some(url) = &settings.rpc_url {
-            net.base_rpc = url.clone();
+            net.base_rpc = network::require_https("rpc_url (settings)", url.clone())?;
         }
     }
 
@@ -233,26 +233,22 @@ async fn handle_config(command: cli::ConfigCommand) -> Result<()> {
             let settings = Config::load()?;
             println!("=== settings ===");
             println!("active_key            {}", settings.active_key);
-            println!("output_format         {}", settings.output_format);
             println!("cluster               {}", settings.cluster);
             println!(
                 "rpc_url               {}",
                 settings.rpc_url.as_deref().map(redact_url).unwrap_or_else(|| "(default)".to_string())
             );
-            println!("default_slippage_bps  {}", settings.default_slippage_bps);
-            println!("commitment            {}", settings.commitment);
-            println!("priority_fee          {}", settings.priority_fee);
 
-            let net = Network::resolve();
+            let net = Network::resolve()?;
             println!("\n=== network (env: FLASH_API_URL / ER_RPC_URL / SOLANA_RPC_URL) ===");
-            println!("api_base   {}", net.api_base);
-            println!("er_rpc     {}   (trading)", net.er_rpc);
+            println!("api_base   {}", redact_url(&net.api_base));
+            println!("er_rpc     {}   (trading)", redact_url(&net.er_rpc));
             println!("base_rpc   {}   (setup + withdrawal)", redact_url(&net.base_rpc));
         }
         Set { key, value } => {
             Config::set(&key, &value)?;
             let display = match key.as_str() {
-                "rpc_url" | "rpc_fallbacks" => redact_url(&value),
+                "rpc_url" => redact_url(&value),
                 _ => value,
             };
             println!("Set {key} = {display}");

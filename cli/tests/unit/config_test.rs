@@ -10,10 +10,6 @@ fn default_settings_values() {
     assert_eq!(d.active_key, "default");
     assert_eq!(d.cluster, "mainnet-beta");
     assert!(d.rpc_url.is_none());
-    assert_eq!(d.default_slippage_bps, 100);
-    assert_eq!(d.commitment, "confirmed");
-    assert!(d.rpc_failover);
-    assert!(d.rpc_fallbacks.is_empty());
 }
 
 #[test]
@@ -24,7 +20,6 @@ fn settings_roundtrip_through_json() {
         active_key: "mykey".to_string(),
         cluster: "devnet".to_string(),
         rpc_url: Some("https://my-rpc.example.com".to_string()),
-        ..Default::default()
     };
 
     fs::write(&path, serde_json::to_string_pretty(&s).unwrap()).unwrap();
@@ -36,23 +31,27 @@ fn settings_roundtrip_through_json() {
 }
 
 #[test]
-fn deserializes_settings_written_before_failover_fields_existed() {
-    // Older settings.json lacks rpc_failover/rpc_fallbacks — serde defaults must
-    // fill them rather than erroring. A dropped V1 field (pool_config_url) present
-    // in an old file is ignored, not rejected.
+fn deserializes_settings_with_dropped_legacy_fields() {
+    // An older settings.json carries fields this V2 build no longer models
+    // (output_format, default_slippage_bps, commitment, priority_fee,
+    // rpc_failover, rpc_fallbacks, the V1 pool_config_url). Serde must ignore the
+    // unknown keys and still populate the three fields we kept — never error.
     let old = r#"{
         "active_key": "main",
         "output_format": "table",
-        "cluster": "mainnet-beta",
+        "cluster": "devnet",
         "rpc_url": null,
         "default_slippage_bps": 100,
         "commitment": "confirmed",
         "priority_fee": 100000,
+        "rpc_failover": true,
+        "rpc_fallbacks": [],
         "pool_config_url": "https://legacy.example.com/pool-config"
     }"#;
     let s: Settings = serde_json::from_str(old).expect("must deserialize legacy settings");
-    assert!(s.rpc_failover);
-    assert!(s.rpc_fallbacks.is_empty());
+    assert_eq!(s.active_key, "main");
+    assert_eq!(s.cluster, "devnet");
+    assert!(s.rpc_url.is_none());
 }
 
 #[test]
@@ -72,7 +71,13 @@ fn config_rpc_url_resolves_by_cluster_then_override() {
 }
 
 #[test]
-fn redact_url_strips_query_secrets() {
-    assert_eq!(redact_url("https://rpc.example.com/?api-key=SECRET"), "https://rpc.example.com/?***");
-    assert_eq!(redact_url("https://rpc.example.com/path"), "https://rpc.example.com/path");
+fn redact_url_strips_query_path_and_userinfo_secrets() {
+    // Query-embedded key.
+    assert_eq!(redact_url("https://rpc.example.com/?api-key=SECRET"), "https://rpc.example.com/***");
+    // Path-embedded key (Helius/Triton style).
+    assert_eq!(redact_url("https://rpc.example.com/SECRETKEY"), "https://rpc.example.com/***");
+    // Userinfo-embedded key.
+    assert_eq!(redact_url("https://user:SECRET@rpc.example.com"), "https://rpc.example.com/***");
+    // Bare host with no tail is printed in full (nothing to hide).
+    assert_eq!(redact_url("https://api.mainnet-beta.solana.com"), "https://api.mainnet-beta.solana.com");
 }

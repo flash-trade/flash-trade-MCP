@@ -41,8 +41,18 @@ export interface PositionView {
  *   liq     ≈ entry × (1 ∓ collateral/size × 0.92)
  * The raw ...Usd fields on PositionMetrics are native 6-decimal USD strings.
  */
+/** Estimate liquidation price from position inputs. Single source of the liq
+ *  formula so pre-trade previews and the post-trade account view never diverge
+ *  (and neither surfaces the spread-distorted builder value — GOTCHAS §20).
+ *  liq ≈ entry × (1 ∓ collateral/size × 0.92). Approximate. */
+export function estimateLiqPrice(sideLong: boolean, entryPrice: number, sizeUsd: number, collateralUsd: number): number {
+  const dir = sideLong ? 1 : -1
+  return entryPrice > 0 && sizeUsd > 0 ? entryPrice * (1 - dir * (collateralUsd / sizeUsd) * 0.92) : 0
+}
+
 export function computePositionView(pm: PositionMetrics, markPriceUi: number): PositionView {
-  const side = pm.sideUi === 'Short' ? 'Short' : 'Long'
+  // Case-insensitive so a lowercase sideUi can't flip a short's PnL sign.
+  const side = pm.sideUi?.toLowerCase() === 'short' ? 'Short' : 'Long'
   const dir = side === 'Long' ? 1 : -1
   const entry = num(pm.entryPriceUi)
   const size = num(pm.sizeUsdUi)
@@ -54,7 +64,7 @@ export function computePositionView(pm: PositionMetrics, markPriceUi: number): P
   const pnlUsd = pricePnl - feeUsd
   const pnlPct = collateral > 0 ? (pnlUsd / collateral) * 100 : 0
   const leverage = collateral > 0 ? size / collateral : 0
-  const liq = entry > 0 && size > 0 ? entry * (1 - dir * (collateral / size) * 0.92) : 0
+  const liq = estimateLiqPrice(side === 'Long', entry, size, collateral)
 
   return {
     marketSymbol: pm.marketSymbol,

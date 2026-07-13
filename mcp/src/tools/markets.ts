@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { zPubkey } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { buildCustodySymbolMap, type MarketAccount, type PoolDataResponse } from './shared/custody-map.ts'
@@ -40,7 +41,7 @@ export function registerMarketTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('get_market', {
     description: 'Get the raw Anchor-decoded account for one market by pubkey (debugging / deep dives).',
     inputSchema: {
-      pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Market account pubkey'),
+      pubkey: zPubkey.describe('Market account pubkey'),
     },
   }, async ({ pubkey }) => {
     const m = await client.getMarket(pubkey)

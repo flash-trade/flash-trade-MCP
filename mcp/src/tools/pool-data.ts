@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { zPubkey } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { formatCompactUsd, type PoolDataResponse } from './shared/custody-map.ts'
@@ -7,7 +8,7 @@ export function registerPoolDataTools(server: McpServer, client: FlashApiClient)
   server.registerTool('get_pool_data', {
     description: 'Get aggregated liquidity-pool stats: AUM (total pool value), LP price, and stablecoin percentage per pool.',
     inputSchema: {
-      pool_pubkey: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).optional().describe('Optional: one pool pubkey; omit for all pools'),
+      pool_pubkey: zPubkey.optional().describe('Optional: one pool pubkey; omit for all pools'),
     },
   }, async ({ pool_pubkey }) => {
     if (pool_pubkey) {

@@ -1,10 +1,11 @@
 import { z } from 'zod'
+import { zPubkey } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import type { BasketSnapshot, OrderMetrics, PositionMetrics, PriceInfo } from '../client/types.ts'
 import { computePositionView, renderPositionView, collateralInPositions, fmtUsd } from './shared/format.ts'
 
-const ownerParam = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey (owner)')
+const ownerParam = zPubkey.describe('Wallet pubkey (owner)')
 
 /** The V2 lifecycle, for "not set up" guidance. Detect via basketPubkey == null. */
 export const SETUP_STEPS =

@@ -1,16 +1,10 @@
 use crate::core::api::ApiClient;
 use crate::core::compute::position_view;
+use crate::core::json::{f64_field as f, str_field as s};
 use crate::core::network::Network;
 use crate::output::colors::{color_pnl, color_pnl_percent, color_side, format_price, format_usd};
 use anyhow::Result;
 use serde_json::Value;
-
-fn f(v: &Value, key: &str) -> f64 {
-    v.get(key).and_then(|x| x.as_str()).and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0)
-}
-fn s<'a>(v: &'a Value, key: &str) -> &'a str {
-    v.get(key).and_then(|x| x.as_str()).unwrap_or("")
-}
 
 pub async fn health(api: &ApiClient) -> Result<()> {
     let h = api.health().await?;
@@ -135,7 +129,9 @@ pub async fn account(api: &ApiClient, _net: &Network, owner: &str) -> Result<()>
             println!("\n-- {} Position(s) (mark-price PnL) --", map.len());
             for pos in map.values() {
                 let sym = s(pos, "marketSymbol");
-                let long = s(pos, "sideUi") != "Short";
+                // Case-insensitive: the API's sibling marketStats.side is lowercase,
+                // so don't assume sideUi is capitalized or a wrong PnL sign results.
+                let long = !s(pos, "sideUi").eq_ignore_ascii_case("short");
                 let v = position_view(
                     long,
                     f(pos, "entryPriceUi"),

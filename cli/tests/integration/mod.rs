@@ -19,7 +19,7 @@ async fn health_is_ok() {
         eprintln!("skipping (set RUN_INTEGRATION=1 to run live smoke)");
         return;
     }
-    let api = ApiClient::new(&Network::resolve());
+    let api = ApiClient::new(&Network::resolve().expect("default network is valid https"));
     let h = api.health().await.expect("health should respond");
     assert_eq!(h.get("status").and_then(|s| s.as_str()), Some("ok"));
     // V2 runs the ER program.
@@ -31,7 +31,7 @@ async fn prices_include_a_nonzero_sol() {
     if !enabled() {
         return;
     }
-    let api = ApiClient::new(&Network::resolve());
+    let api = ApiClient::new(&Network::resolve().expect("default network is valid https"));
     let prices = api.prices().await.expect("prices should respond");
     let sol = prices
         .get("SOL")
@@ -46,7 +46,7 @@ async fn tokens_expose_mint_addresses() {
     if !enabled() {
         return;
     }
-    let api = ApiClient::new(&Network::resolve());
+    let api = ApiClient::new(&Network::resolve().expect("default network is valid https"));
     let tokens = api.tokens().await.expect("tokens should respond");
     assert!(!tokens.is_empty(), "active pool must list tokens");
     for t in &tokens {

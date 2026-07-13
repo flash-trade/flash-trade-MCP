@@ -3,49 +3,75 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
 
-/// Redact query parameters from URLs to avoid leaking API keys in output.
-/// `https://rpc.example.com/?api-key=SECRET` → `https://rpc.example.com/?***`
+/// Redact everything after the host so embedded API keys never print — providers
+/// put keys in the query (`?api-key=…`), the PATH (`/…SECRET…`), or userinfo
+/// (`user:key@…`). Keeps only `scheme://host[:port]`.
+/// `https://user:k@rpc.x.com/SECRET?api-key=Y` → `https://rpc.x.com/***`
 pub fn redact_url(url: &str) -> String {
-    if let Some(idx) = url.find('?') {
-        format!("{}?***", &url[..idx])
+    let Some((scheme, rest)) = url.split_once("://") else {
+        return match url.find('?') {
+            Some(i) => format!("{}?***", &url[..i]),
+            None => url.to_string(),
+        };
+    };
+    // authority = up to the first '/', '?', or '#'; everything else is the tail.
+    let (authority, tail) = match rest.find(['/', '?', '#']) {
+        Some(i) => (&rest[..i], &rest[i..]),
+        None => (rest, ""),
+    };
+    // Strip userinfo (user:pass@) from the authority, leaving host[:port].
+    let (userinfo, host) = match authority.rsplit_once('@') {
+        Some((u, h)) => (Some(u), h),
+        None => (None, authority),
+    };
+    // Any userinfo or tail can carry an embedded key → keep only scheme://host.
+    if userinfo.is_some() || !tail.is_empty() {
+        format!("{scheme}://{host}/***")
     } else {
-        url.to_string()
+        format!("{scheme}://{host}")
     }
 }
 
+/// Redact any embedded http(s) URLs inside an arbitrary message — e.g. a reqwest
+/// or RPC-client error whose Display includes the endpoint (which may carry an
+/// API key). Each URL is reduced to scheme://host via redact_url.
+pub fn scrub_urls(msg: &str) -> String {
+    let mut out = String::with_capacity(msg.len());
+    let mut rest = msg;
+    while let Some(pos) = rest.find("http") {
+        let candidate = &rest[pos..];
+        if candidate.starts_with("http://") || candidate.starts_with("https://") {
+            out.push_str(&rest[..pos]);
+            let end = candidate
+                .find(|c: char| c.is_whitespace() || matches!(c, ')' | ']' | '"' | '\'' | ',' | '<' | '>'))
+                .unwrap_or(candidate.len());
+            out.push_str(&redact_url(&candidate[..end]));
+            rest = &candidate[end..];
+        } else {
+            out.push_str(&rest[..pos + 4]);
+            rest = &rest[pos + 4..];
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
+// Only fields the V2 CLI actually reads: which key is active, and how to reach
+// the base chain (cluster default or an explicit rpc_url override). Unknown keys
+// in an older settings.json are ignored on load (serde drops them).
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Settings {
     pub active_key: String,
-    pub output_format: String,
     pub cluster: String,
     pub rpc_url: Option<String>,
-    pub default_slippage_bps: u16,
-    pub commitment: String,
-    pub priority_fee: u64,
-    /// When true, failed RPC calls rotate through fallback endpoints before giving up.
-    #[serde(default = "default_true")]
-    pub rpc_failover: bool,
-    /// Additional RPC URLs to try when the primary fails (tried in order).
-    #[serde(default)]
-    pub rpc_fallbacks: Vec<String>,
-}
-
-fn default_true() -> bool {
-    true
 }
 
 impl Default for Settings {
     fn default() -> Self {
         Self {
             active_key: "default".to_string(),
-            output_format: "table".to_string(),
             cluster: "mainnet-beta".to_string(),
             rpc_url: None,
-            default_slippage_bps: 100,
-            commitment: "confirmed".to_string(),
-            priority_fee: 100_000,
-            rpc_failover: true,
-            rpc_fallbacks: Vec::new(),
         }
     }
 }
@@ -146,12 +172,6 @@ impl Config {
         let mut settings = Self::load()?;
         match key {
             "active_key" => settings.active_key = value.to_string(),
-            "output_format" => {
-                match value {
-                    "table" | "json" => settings.output_format = value.to_string(),
-                    _ => anyhow::bail!("Invalid output_format: '{value}'. Must be 'table' or 'json'"),
-                }
-            }
             "cluster" => {
                 match value {
                     "mainnet-beta" | "mainnet" => settings.cluster = "mainnet-beta".to_string(),
@@ -160,37 +180,8 @@ impl Config {
                 }
             }
             "rpc_url" => settings.rpc_url = Some(value.to_string()),
-            "default_slippage_bps" => {
-                settings.default_slippage_bps = value.parse()
-                    .with_context(|| format!("Invalid slippage: '{value}'. Must be a number (basis points)"))?;
-            }
-            "commitment" => {
-                match value {
-                    "processed" | "confirmed" | "finalized" => settings.commitment = value.to_string(),
-                    _ => anyhow::bail!("Invalid commitment: '{value}'. Must be processed/confirmed/finalized"),
-                }
-            }
-            "priority_fee" => {
-                settings.priority_fee = value.parse()
-                    .with_context(|| format!("Invalid priority_fee: '{value}'. Must be a number (microlamports)"))?;
-            }
-            "rpc_failover" => {
-                settings.rpc_failover = match value {
-                    "on" | "true" | "yes" | "1" => true,
-                    "off" | "false" | "no" | "0" => false,
-                    _ => anyhow::bail!("Invalid rpc_failover: '{value}'. Must be on/off, true/false, yes/no"),
-                };
-            }
-            "rpc_fallbacks" => {
-                settings.rpc_fallbacks = if value.is_empty() {
-                    Vec::new()
-                } else {
-                    value.split(',').map(|s| s.trim().to_string()).filter(|s| !s.is_empty()).collect()
-                };
-            }
             _ => anyhow::bail!(
-                "Unknown setting: '{key}'. Valid keys: active_key, output_format, cluster, rpc_url, \
-                 default_slippage_bps, commitment, priority_fee, rpc_failover, rpc_fallbacks"
+                "Unknown setting: '{key}'. Valid keys: active_key, cluster, rpc_url"
             ),
         }
         Self::save(&settings)?;

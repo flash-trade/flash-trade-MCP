@@ -1,9 +1,10 @@
 import { z } from 'zod'
+import { zPubkey, zSide } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { txFooter } from './shared/tx.ts'
 
-const pubkey = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
+const pubkey = zPubkey
 
 export function registerCollateralTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('add_collateral', {
@@ -12,7 +13,7 @@ export function registerCollateralTools(server: McpServer, client: FlashApiClien
       'Identify the position by market symbol + side.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL"'),
-      side: z.enum(['LONG', 'SHORT']).describe('Side of the position'),
+      side: zSide.describe('Side of the position'),
       deposit_amount: z.string().max(32).describe('Amount to add in deposit-token UI units'),
       deposit_token_symbol: z.string().max(16).describe('Deposit token symbol, e.g. "USDC"'),
       owner: pubkey.describe('Wallet pubkey'),
@@ -31,7 +32,7 @@ export function registerCollateralTools(server: McpServer, client: FlashApiClien
       `=== Add Collateral — ${params.side} ${params.market_symbol} ===`,
       `Collateral: $${res.existingCollateralUsd} → $${res.newCollateralUsd}`,
       `Leverage: ${res.existingLeverage}x → ${res.newLeverage}x`,
-      `Liquidation: $${res.existingLiquidationPrice} → $${res.newLiquidationPrice}`,
+      `Liquidation (est.): $${res.existingLiquidationPrice} → $${res.newLiquidationPrice}`,
       `Deposit value: $${res.depositUsdValue} (max addable: $${res.maxAddableUsd})`,
     ]
     return { content: [{ type: 'text' as const, text: lines.join('\n') + txFooter('add-collateral', res.transactionBase64) }] }
@@ -43,7 +44,7 @@ export function registerCollateralTools(server: McpServer, client: FlashApiClien
       'ER chain. Identify the position by market symbol + side.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL"'),
-      side: z.enum(['LONG', 'SHORT']).describe('Side of the position'),
+      side: zSide.describe('Side of the position'),
       withdraw_amount_usd: z.string().max(32).describe('USD to remove (> 0 and < current collateral)'),
       withdraw_token_symbol: z.string().max(16).describe('Token to receive, e.g. "USDC"'),
       owner: pubkey.describe('Wallet pubkey'),
@@ -62,7 +63,7 @@ export function registerCollateralTools(server: McpServer, client: FlashApiClien
       `=== Remove Collateral — ${params.side} ${params.market_symbol} ===`,
       `Collateral: $${res.existingCollateralUsd} → $${res.newCollateralUsd}`,
       `Leverage: ${res.existingLeverage}x → ${res.newLeverage}x`,
-      `Liquidation: $${res.existingLiquidationPrice} → $${res.newLiquidationPrice}`,
+      `Liquidation (est.): $${res.existingLiquidationPrice} → $${res.newLiquidationPrice}`,
       `Receive: ${res.receiveAmountUi} ($${res.receiveAmountUsdUi}) | max withdrawable: $${res.maxWithdrawableUsd}`,
     ]
     return { content: [{ type: 'text' as const, text: lines.join('\n') + txFooter('remove-collateral', res.transactionBase64) }] }

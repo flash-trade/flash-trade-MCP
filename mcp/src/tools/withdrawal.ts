@@ -1,9 +1,10 @@
 import { z } from 'zod'
+import { zPubkey } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { txFooter } from './shared/tx.ts'
 
-const pubkey = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
+const pubkey = zPubkey
 
 export function registerWithdrawalTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('request_withdrawal', {

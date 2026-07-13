@@ -45,20 +45,18 @@ describe('buildCustodySymbolMap', () => {
     expect(map.get('cust1')).toEqual({ symbol: 'SOL', maxLeverage: '100.00', pool: 'Crypto.1' })
   })
 
-  it('includes virtual custody fallbacks', () => {
-    const map = buildCustodySymbolMap({ pools: [{ poolName: 'Empty', custodyStats: [] }] })
-    expect(map.get('6bthDsp8pcGBGKVKCKZjV5JfuSUNRo62RG4hQHj1u4CK')?.symbol).toBe('BNB')
+  it('maps every custody from multiple pools (virtual/equity included, no hardcoding)', () => {
+    const map = buildCustodySymbolMap({ pools: [
+      { poolName: 'Virtual.1', custodyStats: [{ symbol: 'XAU', custodyAccount: 'v1', maxLeverage: '120.00' }] },
+      { poolName: 'Equity.1', custodyStats: [{ symbol: 'NVDA', custodyAccount: 'e1', maxLeverage: '12.00' }] },
+    ] })
+    expect(map.get('v1')).toEqual({ symbol: 'XAU', maxLeverage: '120.00', pool: 'Virtual.1' })
+    expect(map.get('e1')?.symbol).toBe('NVDA')
   })
 
-  it('pool-data takes precedence over the virtual map', () => {
-    const map = buildCustodySymbolMap({ pools: [{ poolName: 'Override', custodyStats: [
-      { symbol: 'OVERRIDDEN_BNB', custodyAccount: '6bthDsp8pcGBGKVKCKZjV5JfuSUNRo62RG4hQHj1u4CK', maxLeverage: '99.00' },
-    ] }] })
-    expect(map.get('6bthDsp8pcGBGKVKCKZjV5JfuSUNRo62RG4hQHj1u4CK')?.symbol).toBe('OVERRIDDEN_BNB')
-  })
-
-  it('handles empty pool data', () => {
-    expect(buildCustodySymbolMap({ pools: [] }).size).toBeGreaterThan(0)
+  it('is dynamic-only: empty pool data yields an empty map (no static fallback)', () => {
+    expect(buildCustodySymbolMap({ pools: [] }).size).toBe(0)
+    expect(buildCustodySymbolMap({ pools: [{ poolName: 'Empty', custodyStats: [] }] }).size).toBe(0)
   })
 })
 

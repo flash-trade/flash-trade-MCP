@@ -5,6 +5,7 @@
 // return PARTIALLY-SIGNED base64 txs; this client never signs or submits.
 // ─────────────────────────────────────────────────────────────────────────────
 
+use crate::core::config::scrub_urls;
 use crate::core::network::Network;
 use crate::error::FlashCliError;
 use serde::Deserialize;
@@ -47,7 +48,7 @@ impl ApiClient {
             .header("Accept", "application/json")
             .send()
             .await
-            .map_err(|e| FlashCliError::ApiConnection(path.to_string(), e.to_string()))?;
+            .map_err(|e| FlashCliError::ApiConnection(path.to_string(), scrub_urls(&e.to_string())))?;
         Self::handle(path, resp).await
     }
 
@@ -59,7 +60,7 @@ impl ApiClient {
             .json(body)
             .send()
             .await
-            .map_err(|e| FlashCliError::ApiConnection(path.to_string(), e.to_string()))?;
+            .map_err(|e| FlashCliError::ApiConnection(path.to_string(), scrub_urls(&e.to_string())))?;
         Self::handle(path, resp).await
     }
 
@@ -70,10 +71,22 @@ impl ApiClient {
             let v: Value = resp
                 .json()
                 .await
-                .map_err(|e| FlashCliError::ApiConnection(path.to_string(), e.to_string()))?;
-            if let Some(err) = v.get("err").and_then(|e| e.as_str()) {
-                if !err.is_empty() {
-                    return Err(FlashCliError::ApiBodyErr(path.to_string(), err.to_string()));
+                .map_err(|e| FlashCliError::ApiConnection(path.to_string(), scrub_urls(&e.to_string())))?;
+            // A 200 can still carry `err`. Contract is string|null, but treat ANY
+            // non-null, non-empty err as a failure (matches the MCP) so a structured
+            // err object can never slip through as success.
+            if let Some(e) = v.get("err") {
+                let failed = match e {
+                    Value::Null => false,
+                    Value::String(s) => !s.is_empty(),
+                    _ => true,
+                };
+                if failed {
+                    let msg = match e {
+                        Value::String(s) => s.clone(),
+                        other => other.to_string(),
+                    };
+                    return Err(FlashCliError::ApiBodyErr(path.to_string(), msg));
                 }
             }
             Ok(v)
@@ -108,9 +121,6 @@ impl ApiClient {
     pub async fn price(&self, symbol: &str) -> ApiResult<Value> {
         self.get(&format!("/prices/{}", symbol)).await
     }
-    pub async fn markets(&self) -> ApiResult<Value> {
-        self.get("/raw/markets").await
-    }
     pub async fn pool_data(&self) -> ApiResult<Value> {
         self.get("/pool-data").await
     }
@@ -128,12 +138,9 @@ impl ApiClient {
             .ok_or_else(|| FlashCliError::Other(format!("token '{symbol}' not found in the active pool")))
     }
 
-    // ── Transaction builders + previews (generic) ──
+    // ── Transaction builders (generic over the endpoint path) ──
     pub async fn build(&self, builder_path: &str, body: Value) -> ApiResult<Value> {
         self.post(&format!("/transaction-builder/{}", builder_path), &body).await
-    }
-    pub async fn preview(&self, preview_path: &str, body: Value) -> ApiResult<Value> {
-        self.post(&format!("/preview/{}", preview_path), &body).await
     }
 }
 

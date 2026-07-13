@@ -46,11 +46,7 @@ pub fn position_view(
     let pnl_usd = price_pnl - fee_usd;
     let pnl_pct = if collateral_usd > 0.0 { pnl_usd / collateral_usd * 100.0 } else { 0.0 };
     let leverage = if collateral_usd > 0.0 { size_usd / collateral_usd } else { 0.0 };
-    let liquidation_price = if entry_price > 0.0 && size_usd > 0.0 {
-        entry_price * (1.0 - dir * (collateral_usd / size_usd) * 0.92)
-    } else {
-        0.0
-    };
+    let liquidation_price = estimate_liq(side_long, entry_price, size_usd, collateral_usd);
     PositionView {
         side_long,
         entry_price,
@@ -61,6 +57,19 @@ pub fn position_view(
         pnl_usd,
         pnl_pct,
         liquidation_price,
+    }
+}
+
+/// Estimate liquidation price from position inputs. Single source of the liq
+/// formula so pre-trade previews and the post-trade account view never diverge
+/// (and neither surfaces the spread-distorted builder value — GOTCHAS §20).
+/// liq ≈ entry × (1 ∓ collateral/size × 0.92). dir = +1 long, −1 short.
+pub fn estimate_liq(side_long: bool, entry_price: f64, size_usd: f64, collateral_usd: f64) -> f64 {
+    let dir = if side_long { 1.0 } else { -1.0 };
+    if entry_price > 0.0 && size_usd > 0.0 {
+        entry_price * (1.0 - dir * (collateral_usd / size_usd) * 0.92)
+    } else {
+        0.0
     }
 }
 

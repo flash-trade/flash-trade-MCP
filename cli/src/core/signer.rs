@@ -6,6 +6,7 @@
 // setup/withdrawal → base. This is the ONLY place the CLI moves funds.
 // ─────────────────────────────────────────────────────────────────────────────
 
+use crate::core::config::scrub_urls;
 use crate::core::network::{Chain, Network};
 use crate::error::FlashCliError;
 use base64::Engine as _;
@@ -59,7 +60,7 @@ pub fn sign_and_submit(
     let rpc = RpcClient::new_with_commitment(net.rpc_for(chain).to_string(), CommitmentConfig::confirmed());
     let sig = rpc
         .send_transaction(&tx)
-        .map_err(|e| FlashCliError::SendFailed(chain.label().to_string(), decorate(&e.to_string(), chain)))?;
+        .map_err(|e| FlashCliError::SendFailed(chain.label().to_string(), decorate(&scrub_urls(&e.to_string()), chain)))?;
 
     // Poll signature status until confirmed/finalized (works on both chains).
     let started = Instant::now();
@@ -67,7 +68,10 @@ pub fn sign_and_submit(
         if let Ok(statuses) = rpc.get_signature_statuses(&[sig]) {
             if let Some(Some(status)) = statuses.value.into_iter().next() {
                 if let Some(err) = status.err {
-                    return Err(FlashCliError::SendFailed(chain.label().to_string(), format!("on-chain error: {err}")));
+                    return Err(FlashCliError::SendFailed(
+                        chain.label().to_string(),
+                        decorate(&format!("on-chain error: {err}"), chain),
+                    ));
                 }
                 if status.satisfies_commitment(CommitmentConfig::confirmed()) {
                     return Ok(sig.to_string());

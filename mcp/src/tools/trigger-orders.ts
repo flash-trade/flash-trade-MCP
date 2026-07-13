@@ -1,11 +1,12 @@
 import { z } from 'zod'
+import { zPubkey, zSide } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { zBool } from '../sanitize.ts'
 import { txFooter } from './shared/tx.ts'
 
-const pubkey = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
-const side = z.enum(['LONG', 'SHORT'])
+const pubkey = zPubkey
+const side = zSide
 
 export function registerTriggerOrderTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('place_trigger_order', {

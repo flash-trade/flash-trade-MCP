@@ -1,9 +1,10 @@
 import { z } from 'zod'
+import { zPubkey, zSide } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 
-const pubkey = z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/)
-const side = z.enum(['LONG', 'SHORT'])
+const pubkey = zPubkey
+const side = zSide
 
 export function registerPreviewTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('preview_limit_order_fees', {
@@ -113,7 +114,7 @@ export function registerPreviewTools(server: McpServer, client: FlashApiClient) 
     const lines = [
       `=== Margin Preview (${params.action} $${params.margin_delta_usd}) ===`,
       `New Leverage: ${res.newLeverageUi}x`,
-      `New Liquidation Price: $${res.newLiquidationPriceUi}`,
+      `New Liquidation Price (est.): $${res.newLiquidationPriceUi}`,
       `Max ${params.action === 'ADD' ? 'Addable' : 'Withdrawable'}: $${res.maxAmountUsdUi}`,
     ]
     return { content: [{ type: 'text' as const, text: lines.join('\n') }] }

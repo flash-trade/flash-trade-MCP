@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { zPubkey, zSide } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 import { txFooter } from './shared/tx.ts'
@@ -11,11 +12,11 @@ export function registerTpSlTool(server: McpServer, client: FlashApiClient) {
       '— LONG: TP above mark, SL below; SHORT mirrored. Requires >$10 collateral after fees.',
     inputSchema: {
       market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL"'),
-      side: z.enum(['LONG', 'SHORT']).describe('Side of the position'),
+      side: zSide.describe('Side of the position'),
       size_amount: z.string().max(32).describe('Target-token size the bracket closes'),
       take_profit: z.string().max(32).optional().describe('TP trigger price (UI) — optional if stop_loss given'),
       stop_loss: z.string().max(32).optional().describe('SL trigger price (UI) — optional if take_profit given'),
-      owner: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Wallet pubkey'),
+      owner: zPubkey.describe('Wallet pubkey'),
     },
   }, async (params) => {
     if (!params.take_profit && !params.stop_loss) {

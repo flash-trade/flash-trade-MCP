@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.1 — patch
+
+### Fixed
+- The server now reports its real package version in the MCP `serverInfo` handshake (read from `package.json`) instead of a hardcoded string that had drifted to `1.0.0`.
+
 ## 0.5.0 — V2-only rewrite
 
 Rebuilt from scratch against the Flash Trade **V2** API (MagicBlock Ephemeral Rollup). All V1 paths, concepts, and the position-key request model were removed.

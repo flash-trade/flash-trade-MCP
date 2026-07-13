@@ -1,6 +1,6 @@
 {
   "name": "flash-trade-mcp",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "MCP server for Flash Trade V2 — a Solana perpetuals DEX on a MagicBlock Ephemeral Rollup. Typed tools for accounts (baskets + deposit ledger), two-chain trading, and unsigned transaction building.",
   "module": "src/index.ts",
   "main": "dist/index.js",

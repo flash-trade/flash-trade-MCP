@@ -1,6 +1,6 @@
 # Changelog
 
-## 1.0.0 — V2-only rewrite
+## 0.5.0 — V2-only rewrite
 
 Rebuilt from scratch against the Flash Trade **V2** API (MagicBlock Ephemeral Rollup). All V1 paths, concepts, and the position-key request model were removed.
 

@@ -108,16 +108,6 @@ impl WalletManager {
             .with_context(|| "Failed to import from Solana CLI default keypair")
     }
 
-    pub fn import_private_key(name: &str, key: &str) -> Result<()> {
-        let bytes = bs58::decode(key)
-            .into_vec()
-            .with_context(|| "Invalid base58 private key")?;
-        let keypair = Keypair::try_from(bytes.as_slice())
-            .map_err(|e| anyhow::anyhow!("Invalid private key bytes: {e}"))?;
-        Self::save(name, &keypair)?;
-        Ok(())
-    }
-
     pub fn generate(name: &str) -> Result<solana_sdk::pubkey::Pubkey> {
         let keypair = Keypair::new();
         let pubkey = keypair.pubkey();

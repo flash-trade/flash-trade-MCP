@@ -15,22 +15,24 @@
 
 ```
 flash-trade-MCP/
-├── cli/       # Rust CLI — direct SDK interaction, local signing
-├── mcp/       # TypeScript MCP Server — AI agent interface via REST API
+├── cli/       # Rust CLI — V2 REST client, local signing, two-chain routing
+├── mcp/       # TypeScript MCP Server — AI agent interface via the V2 REST API
 ```
+
+Both target **Flash Trade V2**, which runs the perpetuals program on a [MagicBlock](https://magicblock.gg) Ephemeral Rollup. Neither embeds an SDK: the hosted V2 API (`https://flashapi.trade`) builds unsigned transactions, and both tools sign locally and route each transaction to the right chain.
 
 ### `cli/` — Flash Trade CLI (Rust)
 
-Native Rust CLI using flash-sdk directly for instruction building. Wallet management, position trading, LP operations, and FAF staking.
+Native Rust CLI over the V2 REST API: reads, unsigned transaction building, local signing, and two-chain routing (trading → Ephemeral Rollup, setup/withdrawal → base chain). Wallet management, the account lifecycle (basket → deposit ledger → delegate → deposit), trading, triggers/limits, and withdrawals.
 
 ```bash
 cd cli
 cargo build
 cargo run -- --help
-cargo test                    # 41 tests
+cargo test                    # unit + inline (offline); RUN_INTEGRATION=1 adds live read-only smoke
 ```
 
-See [`cli/CLAUDE.md`](./cli/CLAUDE.md) for architecture and conventions.
+See [`cli/README.md`](./cli/README.md) for the command reference and [`cli/CLAUDE.md`](./cli/CLAUDE.md) for architecture and conventions.
 
 ### `mcp/` — Flash Trade MCP Server (TypeScript)
 
@@ -60,22 +62,25 @@ See [`mcp/README.md`](./mcp/README.md) for full tool catalog and [`mcp/CLAUDE.md
 
 ## Key Concepts
 
-- **Non-custodial**: Transaction tools return unsigned base64 transactions. The user's wallet signs and submits separately.
-- **Perpetuals on Solana**: Leveraged long/short positions on SOL, BTC, ETH, and more via Flash Trade's on-chain program.
-- **Pyth Oracle Prices**: All prices from Pyth Lazer (200ms updates). Mainnet only — devnet returns stale/zero.
-- **SOL positions use JitoSOL** as underlying collateral on-chain.
+- **Non-custodial**: Transaction endpoints return **partially-signed** unsigned base64 transactions — the API pre-fills its own signer slots and chooses the blockhash; you add only your signature.
+- **Two chains**: Trading submits to the **Ephemeral Rollup** RPC; account setup and withdrawals submit to the **base-chain** Solana RPC. Submitting to the wrong chain fails to land.
+- **Baskets + deposit ledger**: Positions and orders live in a per-wallet basket PDA funded from a deposit ledger, both created once before trading.
+- **Perpetuals on Solana**: Leveraged long/short positions on SOL, BTC, ETH, forex, commodities, and more.
+- **Oracle prices**: From Pyth Lazer. Mainnet only — the public V2 surface is mainnet.
 
 ---
 
 ## Environment Setup
 
-Both projects need a Solana RPC endpoint. Set via environment variable:
+Both projects resolve the V2 network from the environment, with working defaults — you can run reads with no configuration:
 
 ```bash
-export SOLANA_RPC_URL=https://api.mainnet-beta.solana.com
+export FLASH_API_URL=https://flashapi.trade            # REST base (root; the /v2 edge prefix is not deployed)
+export ER_RPC_URL=https://flash.magicblock.xyz         # trading submission (Ephemeral Rollup)
+export SOLANA_RPC_URL=https://api.mainnet-beta.solana.com   # setup + withdrawal submission (base chain)
 ```
 
-For better performance, use a dedicated RPC (Helius, Triton, etc.).
+For better performance, point `SOLANA_RPC_URL` at a dedicated RPC (Helius, Triton, etc.).
 
 ---
 
@@ -95,8 +100,8 @@ Publishing is **not automatic on merge**. It only happens when you push a versio
 ```bash
 # 1. Bump version in mcp/package.json (in a PR, merge it)
 # 2. Tag the merge commit on main:
-git tag v0.1.0
-git push origin v0.1.0
+git tag v1.0.0
+git push origin v1.0.0
 # 3. The publish workflow triggers automatically → builds → publishes to NPM
 ```
 
@@ -106,6 +111,6 @@ No tag = no publish. Merging PRs only runs CI checks.
 
 <div align="center">
 
-**Built with [flash-sdk](https://github.com/flash-trade/flash-contracts-closed) · Powered by [Solana](https://solana.com) · Prices from [Pyth](https://pyth.network)**
+**Flash Trade V2 on [MagicBlock](https://magicblock.gg) · Powered by [Solana](https://solana.com) · Prices from [Pyth](https://pyth.network)**
 
 </div>

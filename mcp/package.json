@@ -1,7 +1,7 @@
 {
   "name": "flash-trade-mcp",
-  "version": "0.4.1",
-  "description": "MCP server for Flash Trade — perpetual futures DEX on Solana. Provides AI agents with typed tools for trading, position management, and market data.",
+  "version": "1.0.0",
+  "description": "MCP server for Flash Trade V2 — a Solana perpetuals DEX on a MagicBlock Ephemeral Rollup. Typed tools for accounts (baskets + deposit ledger), two-chain trading, and unsigned transaction building.",
   "module": "src/index.ts",
   "main": "dist/index.js",
   "type": "module",
@@ -31,6 +31,8 @@
     "model-context-protocol",
     "flash-trade",
     "solana",
+    "magicblock",
+    "ephemeral-rollup",
     "defi",
     "perpetual-futures",
     "trading",
@@ -40,7 +42,6 @@
   "homepage": "https://github.com/flash-trade/flash-trade-MCP#readme",
   "devDependencies": {
     "@types/bun": "latest",
-    "bs58": "^6.0.0",
     "msw": "^2.12.13",
     "typescript": "^5.9.3",
     "vitest": "^4.1.0"

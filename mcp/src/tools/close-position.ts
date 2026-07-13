@@ -1,57 +1,41 @@
 import { z } from 'zod'
+import { zPubkey, zSide } from './shared/schemas.ts'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
-import { zBool } from '../sanitize.ts'
-import type { ClosePositionResponse } from '../client/types.ts'
-
-function formatClosePreview(res: ClosePositionResponse): string {
-  const lines = [
-    '=== Close Position Preview ===',
-    `Mark Price: $${res.markPrice}`,
-    `Entry Price: $${res.entryPrice}`,
-    `Settled PnL: $${res.settledPnl}`,
-    '',
-    `Size: $${res.existingSize} → $${res.newSize}`,
-    `Collateral: $${res.existingCollateral} → $${res.newCollateral}`,
-    `Leverage: ${res.existingLeverage}x → ${res.newLeverage}x`,
-    `Liq Price: $${res.existingLiquidationPrice} → $${res.newLiquidationPrice}`,
-    '',
-    `Receive: ${res.receiveTokenAmountUi} ${res.receiveTokenSymbol} ($${res.receiveTokenAmountUsdUi})`,
-    `Fees: $${res.fees} (before discount: $${res.feesBeforeDiscount})`,
-  ]
-  if (res.lockAndUnsettledFeeUsd) {
-    lines.push(`Lock & Unsettled Fee: $${res.lockAndUnsettledFeeUsd}`)
-  }
-  if (res.err) {
-    lines.push(`\nWARNING: ${res.err}`)
-  }
-  if (res.transactionBase64) {
-    lines.push(`\nTransaction (base64, unsigned — sign with wallet):`)
-    lines.push(res.transactionBase64)
-  }
-  return lines.join('\n')
-}
+import { txFooter } from './shared/tx.ts'
 
 export function registerClosePositionTool(server: McpServer, client: FlashApiClient) {
   server.registerTool('close_position', {
     description:
-      'Build a transaction to close (fully or partially) an existing position. Returns preview with PnL, fees, and receive amount, plus unsigned transaction. ' +
-      'For full close: set input_usd to position size. For partial: use smaller amount. Requires position_key from get_positions.',
+      'Build a transaction to close a position fully or partially (ER chain). Identify the position by market symbol ' +
+      '+ side (not a position key). input_usd is the USD notional to close; "0" (or ≥97% of size) means a FULL close. ' +
+      'Returns settlement preview + the unsigned transaction.',
     inputSchema: {
-      position_key: z.string().regex(/^[1-9A-HJ-NP-Za-km-z]{32,44}$/).describe('Position account pubkey to close'),
-      input_usd: z.string().max(32).describe('USD amount to close, e.g. "500.00" for full or "250.00" for partial'),
-      withdraw_token_symbol: z.string().max(16).describe('Token to receive: "USDC", "SOL", etc.'),
-      keep_leverage_same: zBool.optional().describe('Keep leverage constant during partial close'),
-      slippage_percentage: z.string().max(8).optional().describe('Default: "0.5" (0.5%)'),
+      market_symbol: z.string().max(16).describe('Market symbol, e.g. "SOL"'),
+      side: zSide.describe('Side of the position being closed'),
+      input_usd: z.string().max(32).describe('USD notional to close; "0" = full close'),
+      withdraw_token_symbol: z.string().max(16).describe('Settlement token symbol, e.g. "USDC"'),
+      owner: zPubkey.describe('Wallet pubkey (required)'),
+      slippage_percentage: z.string().max(8).optional().describe('Default: "0.5"'),
     },
   }, async (params) => {
     const res = await client.closePosition({
-      positionKey: params.position_key,
+      marketSymbol: params.market_symbol,
+      side: params.side,
       inputUsdUi: params.input_usd,
       withdrawTokenSymbol: params.withdraw_token_symbol,
-      keepLeverageSame: params.keep_leverage_same,
+      owner: params.owner,
       slippagePercentage: params.slippage_percentage,
     })
-    return { content: [{ type: 'text' as const, text: formatClosePreview(res) }] }
+    const full = params.input_usd === '0' || res.newSize === '0'
+    const lines = [
+      `=== Close ${params.side} ${params.market_symbol} (${full ? 'FULL' : 'partial'}) ===`,
+      `Receive: ${res.receiveTokenAmountUi} ${res.receiveTokenSymbol} ($${res.receiveTokenAmountUsdUi})`,
+      `Mark: $${res.markPrice} | Entry: $${res.entryPrice}`,
+      `Settled PnL: $${res.settledPnl}`,
+      `Fees: $${res.fees}`,
+      `Size: ${res.existingSize} → ${res.newSize} | Collateral: $${res.existingCollateral} → $${res.newCollateral}`,
+    ]
+    return { content: [{ type: 'text' as const, text: lines.join('\n') + txFooter('close-position', res.transactionBase64) }] }
   })
 }

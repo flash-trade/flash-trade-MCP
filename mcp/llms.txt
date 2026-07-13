@@ -1,100 +1,95 @@
-# Flash Trade MCP Server
+# Flash Trade V2 MCP Server
 
-> MCP server for Flash Trade perpetual DEX on Solana. Provides AI agents with tools to read market data, preview trades, and build unsigned transactions for perpetual futures positions.
+> MCP server for Flash Trade V2 — a Solana perpetuals DEX running on a MagicBlock Ephemeral Rollup (ER). Gives AI agents typed tools to read market data, set up trading accounts (baskets + deposit ledger), preview and build unsigned transactions, and sign/submit them to the correct chain.
 
 ## Key Information
 
-- Non-custodial: all transaction tools return unsigned base64 transactions for user signing
-- Prices from Pyth Lazer oracles (mainnet only — devnet returns stale/zero)
-- SOL positions use JitoSOL as underlying collateral on-chain
-- Available markets: SOL, BTC, ETH, and others in Flash Trade pools
+- Non-custodial: every transaction tool returns an unsigned base64 transaction; the user (or sign_and_send with a local keypair) signs and submits.
+- V2 spans TWO chains: TRADING transactions submit to the Ephemeral Rollup RPC; ACCOUNT SETUP + WITHDRAWAL transactions submit to the base-chain Solana RPC. Submitting to the wrong chain fails to land — every transaction tool tells you which value to pass to sign_and_send.
+- Transactions come back PARTIALLY SIGNED (the server pre-filled its signer slots and chose the blockhash). The wallet adds only its own signature; never replace the blockhash.
+- Prices are Pyth Lazer oracles. The V2 API is mainnet.
+- The hosted API serves at ROOT (https://flashapi.trade). The documented /v2 prefix is not deployed; set FLASH_API_URL to override.
+
+## Account lifecycle (one-time per wallet, IN ORDER)
+
+The on-chain program enforces this order; the API does not. Detect "not set up" via get_owner (basketPubkey = null).
+
+1. init_basket — create the Basket PDA (holds all positions + orders). Base chain.
+2. init_deposit_ledger — create the collateral inbox. Base chain.
+3. delegate_basket — hand the basket to the MagicBlock validator. Base chain.
+4. deposit_direct — fund the vault (takes a token MINT, not a symbol). Base chain.
+Then trade on the Ephemeral Rollup. Withdraw is two steps: request_withdrawal → (wait ~30–90s) → execute_withdrawal (base chain).
 
 ## Critical Rules
 
-- COLLATERAL MINIMUM: Limit orders, take-profit (TP), and stop-loss (SL) require >$10 collateral AFTER entry fees. A $10 position has fees deducted, dropping collateral below $10 and preventing TP/SL/limit orders. Use at least $11-12 input amount.
-- ALWAYS show the preview (entry price, fees, leverage, liquidation price) to the user before they sign any transaction.
-- Position key (on-chain pubkey from get_positions) is required to close, add/remove collateral, or reverse a position.
-- Default slippage is 0.5%. Increase for volatile markets or large positions.
-- Degen mode must be explicitly enabled for leverage above normal limits.
-
-## Order Types
-
-- Market: executes immediately at oracle price + slippage. Any collateral amount.
-- Limit: executes when price hits target. Requires >$10 collateral after fees.
-- Take-Profit (TP): trigger order that closes position at profit target. Requires >$10 collateral after fees.
-- Stop-Loss (SL): trigger order that closes position to limit loss. Requires >$10 collateral after fees.
-- Up to 5 trigger orders (TP/SL) per position, each can close a different percentage.
+- COLLATERAL MINIMUM: limit orders, take-profit, and stop-loss require >$10 collateral AFTER entry fees. Open with at least $11–12 if you plan to set TP/SL/limit.
+- MINT vs SYMBOL: deposit_direct / request_withdrawal / execute_withdrawal take a token MINT (resolve via get_tokens); every trading tool takes a SYMBOL. An unknown mint silently assumes 6 decimals — wrong for Token-2022.
+- PnL: this server computes position PnL from the LIVE MARK PRICE (the indexer's pnl fields are spread-distorted and degenerate near liquidation). Trust the tool's PnL, not raw indexer numbers.
+- ALWAYS show the preview (entry, fees, leverage, liquidation) before signing. Funds move only on explicit user approval; never bundle a deposit into setup.
+- Edit semantics differ: edit_trigger_order requires BOTH price and size; edit_limit_order treats omitted fields as KEEP EXISTING.
+- Latency: "30–50 ms fills" are measured near the validator; from a distant client expect a higher round-trip (geography, not the rollup).
 
 ## Read Tools
 
-- [health_check]: Verify API connectivity
-- [get_markets]: List all perpetual futures markets
-- [get_market]: Get market details by pubkey
-- [get_pools]: List liquidity pools
-- [get_pool]: Get pool details by pubkey
-- [get_custodies]: List custody accounts (token holdings per pool)
-- [get_custody]: Get custody details by pubkey
-- [get_prices]: Get current oracle prices for all assets
-- [get_price]: Get price for one symbol (e.g. "SOL", "BTC")
-- [get_positions]: List positions, optionally filtered by wallet owner (enriched with PnL)
-- [get_position]: Get single position by pubkey
-- [get_orders]: List orders (limit, TP, SL), optionally filtered by owner
-- [get_order]: Get single order by pubkey
-- [get_pool_data]: Get pool AUM, LP stats, utilization metrics
+- [health_check]: API status, program (ER), config env, account counts
+- [get_tokens]: symbols + MINT addresses + decimals + Token-2022 flag (resolve mints for deposits here)
+- [get_prices] / [get_price]: live oracle prices
+- [get_markets] / [get_market]: markets (symbol-resolved list / raw account)
+- [get_pools] / [get_pool]: raw pool accounts
+- [get_custodies] / [get_custody]: raw custody accounts (fee/spread/borrow params)
+- [get_pool_data]: pool AUM, LP price, utilization
+- [get_owner]: THE V2 read model — setup status + positions (mark-price PnL) + orders in one call
+- [get_positions] / [get_orders]: owner-scoped views over the same snapshot
+- [get_basket]: raw basket account by PDA (from get_owner)
+- [get_account_summary]: complete wallet overview (recommended first call for a wallet)
+- [get_trading_overview]: markets + prices + pool utilization (recommended first call for planning trades)
 
-## Preview Tools (no transactions built)
+## Preview Tools (no transaction)
 
-- [preview_limit_order_fees]: Estimate fees, entry price, liq price for a limit order
-- [preview_exit_fee]: Estimate exit fee and price for closing a position amount
-- [preview_tp_sl]: Calculate TP/SL prices and projected PnL (forward, reverse_pnl, reverse_roi modes)
-- [preview_margin]: Preview effect of adding/removing collateral on leverage and liq price
+- [preview_limit_order_fees], [preview_exit_fee], [preview_tp_sl], [preview_margin]
 
-## Transaction Tools (return unsigned base64 transactions)
+## Account Setup Tools (base chain — unsigned tx)
 
-- [open_position]: Open new perpetual position (market or limit, with optional TP/SL). Params: input_token_symbol, output_token_symbol, input_amount, leverage, trade_type, owner
-- [close_position]: Close or partially close a position. Params: position_key, input_usd, withdraw_token_symbol
-- [add_collateral]: Add margin to reduce leverage. Params: position_key, deposit_amount, deposit_token_symbol, owner
-- [remove_collateral]: Remove margin to increase leverage. Params: position_key, withdraw_amount_usd, withdraw_token_symbol, owner
-- [reverse_position]: Close current position + open opposite direction in one transaction. Params: position_key, owner
+- [init_basket], [init_deposit_ledger], [delegate_basket], [deposit_direct]
 
-## Trigger Order Tools (TP/SL management — return unsigned base64 transactions)
+## Trading Tools (Ephemeral Rollup — unsigned tx)
 
-- [place_trigger_order]: Place a TP or SL on an existing position. Params: market_symbol, collateral_symbol, side, trigger_price, size_amount, is_stop_loss, owner
-- [edit_trigger_order]: Edit an existing TP/SL order (change price, size). Params: market_symbol, collateral_symbol, side, order_id, trigger_price, size_amount, is_stop_loss, owner
-- [cancel_trigger_order]: Cancel a single TP or SL order. Params: market_symbol, collateral_symbol, side, order_id, is_stop_loss, owner
-- [cancel_all_trigger_orders]: Cancel ALL TP/SL orders for a market+side. Params: market_symbol, collateral_symbol, side, owner
+- [open_position]: open/increase; omit owner for a FREE QUOTE (no tx). Params: input_token_symbol, output_token_symbol, input_amount, leverage, trade_type, [owner]
+- [close_position]: close full/partial by market_symbol + side ("0" or ≥97% = full)
+- [reverse_position]: flip LONG↔SHORT (2% haircut on proceeds)
+- [add_collateral] / [remove_collateral]: adjust margin by market_symbol + side
+- [place_tp_sl]: TP and/or SL bracket in one atomic tx
+- [place_trigger_order] / [edit_trigger_order] / [cancel_trigger_order] / [cancel_all_trigger_orders]: TP/SL management (cancel_trigger_order order_id 255 = all)
+- [edit_limit_order] / [cancel_limit_order]: resting limit-order management
 
-## Typical Workflow
+## Withdrawal Tools (base chain — unsigned tx)
 
-1. health_check → verify API
-2. get_markets → discover markets
-3. get_prices → check current prices
-4. get_positions(owner) → check existing positions
-5. open_position(input_amount="12.0") → build trade (use $12+ for TP/SL)
-6. Show preview to user → user signs and submits
-7. get_positions(owner) → verify position opened
-8. place_trigger_order → add TP/SL to the position
-9. get_orders(owner) → verify trigger orders placed
+- [request_withdrawal]: escrow + schedule settlement (takes a mint)
+- [execute_withdrawal]: move settled funds to the wallet. 0xbc4 / AccountNotInitialized = settlement hasn't crossed yet (~30–90s) — a timing state, retry.
 
-## Managing Trigger Orders
+## Signing Tool
 
-- Place: place_trigger_order with trigger_price and size_amount
-- View: get_orders(owner) shows all limit/TP/SL orders with order_id
-- Edit: edit_trigger_order with order_id from get_orders
-- Cancel one: cancel_trigger_order with order_id
-- Cancel all: cancel_all_trigger_orders for a market+side
+- [sign_and_send]: sign a base64 transaction with the local keypair and submit. REQUIRES a `network` argument ("er" for trading, "base" for setup/withdrawal) — pass the exact value the transaction tool gave you.
+
+## Typical Workflow (new wallet)
+
+1. health_check → get_trading_overview
+2. get_owner(owner) → if basketPubkey is null, set up: init_basket → init_deposit_ledger → delegate_basket → deposit_direct (each: sign_and_send network="base")
+3. get_tokens → resolve the collateral mint for deposit_direct
+4. open_position(input_amount="12", owner=…) → show preview → sign_and_send(network="er")
+5. place_tp_sl → sign_and_send(network="er")
+6. get_account_summary(owner) → verify
+7. close_position → sign_and_send(network="er")
+8. request_withdrawal → (wait) → execute_withdrawal → each sign_and_send(network="base")
 
 ## Configuration
 
-- FLASH_API_URL: Flash Trade API base URL (required)
-- FLASH_API_TIMEOUT: HTTP timeout in ms (default: 30000)
-- WALLET_PUBKEY: Default wallet for transaction building (optional)
-
-## Deployment
-
-Currently runs as stdio transport (local process). Production deployment requires migration to Streamable HTTP transport on Cloudflare Workers or similar platform.
+- FLASH_API_URL: REST base (default https://flashapi.trade — root; /v2 edge not deployed)
+- ER_RPC_URL: Ephemeral Rollup RPC for trading txs (default https://flash.magicblock.xyz)
+- SOLANA_RPC_URL: base-chain RPC for setup/withdrawal txs (default mainnet-beta)
+- FLASH_API_TIMEOUT, WALLET_PUBKEY, KEYPAIR_PATH: optional
 
 ## Source
 
-- [CLAUDE.md](./CLAUDE.md): Full architecture, domain knowledge, and tool catalog
-- [Source Code](./src/): TypeScript, Bun runtime, @modelcontextprotocol/sdk
+- [CLAUDE.md](./CLAUDE.md): architecture, domain knowledge, full tool catalog
+- [../V2-ALIGNMENT.md](../V2-ALIGNMENT.md): the V2 API reference this server targets

@@ -2,35 +2,36 @@ import { z } from 'zod'
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js'
 import type { FlashApiClient } from '../client/flash-api.ts'
 
-function formatPrice(price: string, exponent: string): string {
-  return (Number(price) * Math.pow(10, Number(exponent))).toFixed(2)
-}
-
 export function registerPriceTools(server: McpServer, client: FlashApiClient) {
   server.registerTool('get_prices', {
-    description:
-      'Get current oracle prices for all traded assets on Flash Trade. Prices come from Pyth Lazer (200ms updates). Returns symbol-to-price mapping. NOTE: Prices are only available on mainnet — devnet returns stale/zero values.',
+    description: 'Get all current oracle prices for the active pool (Pyth Lazer), keyed by symbol, with market session.',
   }, async () => {
     const prices = await client.getPrices()
-    const lines = ['Symbol    Price (USD)']
-    for (const [symbol, data] of Object.entries(prices)) {
-      lines.push(`${symbol.padEnd(10)}$${formatPrice(data.price, data.exponent)}`)
+    const entries = Object.entries(prices).sort(([a], [b]) => a.localeCompare(b))
+    if (entries.length === 0) return { content: [{ type: 'text' as const, text: 'No prices returned.' }] }
+    const lines = ['=== Oracle Prices ===', 'Symbol     | Price          | Session']
+    lines.push('-----------|----------------|----------')
+    for (const [sym, p] of entries) {
+      const px = Number.isFinite(p.priceUi) ? `$${p.priceUi < 1 ? p.priceUi.toPrecision(4) : p.priceUi.toFixed(2)}` : '?'
+      lines.push(`${sym.padEnd(10)} | ${px.padEnd(14)} | ${p.marketSession}`)
     }
     return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
   })
 
   server.registerTool('get_price', {
-    description:
-      'Get the current oracle price for a specific asset symbol (e.g., "SOL", "BTC", "ETH"). Case-insensitive. Returns price in USD with timestamp.',
-    inputSchema: { symbol: z.string().max(16).describe('Asset symbol, e.g. "SOL", "BTC", "ETH"') },
+    description: 'Get the live oracle price for one symbol (e.g. "SOL"). Returns price, market session, and timestamp.',
+    inputSchema: {
+      symbol: z.string().max(16).describe('Market symbol, e.g. "SOL", "BTC", "ETH"'),
+    },
   }, async ({ symbol }) => {
-    const data = await client.getPrice(symbol)
-    const usd = formatPrice(data.price, data.exponent)
+    const p = await client.getPrice(symbol)
+    const px = Number.isFinite(p.priceUi) ? `$${p.priceUi}` : '?'
     const lines = [
-      `${symbol.toUpperCase()}: $${usd}`,
-      `Raw: ${data.price} (exp: ${data.exponent})`,
+      `=== ${symbol.toUpperCase()} Price ===`,
+      `Price: ${px}`,
+      `Session: ${p.marketSession}`,
+      `Timestamp: ${new Date(Math.floor(p.timestampUs / 1000)).toISOString()}`,
     ]
-    if (data.timestamp) lines.push(`Timestamp: ${data.timestamp}`)
     return { content: [{ type: 'text' as const, text: lines.join('\n') }] }
   })
 }

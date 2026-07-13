@@ -1,180 +1,208 @@
-import type { FlashMcpConfig } from '../config.ts'
-import { FlashApiError, FlashApiConnectionError, mapHttpError } from './errors.ts'
+// ─────────────────────────────────────────────────────────────────────────────
+// flash-api.ts — thin typed client for the hosted Flash V2 (MagicBlock ER) API.
+// The entire REST surface (reads + transaction builders + previews) funnels
+// through one request() that normalizes the API's four error channels and
+// throws `err`-in-a-200 for you. Transaction builders return PARTIALLY-SIGNED
+// base64 txs — the server pre-filled its signer slots and chose the blockhash
+// for the right chain; the caller adds only the owner signature and submits to
+// the chain named in network.ts (TX_CHAIN). This client never signs or submits.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { FlashApiError, FlashApiConnectionError, mapHttpError, assertNoErr } from './errors.ts'
 import type * as T from './types.ts'
 
-export class FlashApiClient {
-  constructor(private readonly config: FlashMcpConfig) {}
+/** The client needs only the REST base + timeout; the full FlashMcpConfig
+ *  (which carries RPC URLs + keypair path for sign_and_send) satisfies this. */
+export interface FlashApiClientConfig {
+  apiBaseUrl: string
+  timeoutMs: number
+}
 
-  private async request<R>(path: string, init?: RequestInit): Promise<R> {
+export class FlashApiClient {
+  constructor(private readonly config: FlashApiClientConfig) {}
+
+  /** REST base (root, no trailing slash) this client targets. */
+  get apiBaseUrl(): string {
+    return this.config.apiBaseUrl
+  }
+
+  private async request<R>(method: 'GET' | 'POST', path: string, body?: unknown): Promise<R> {
     const url = `${this.config.apiBaseUrl}${path}`
+    let res: Response
     try {
-      const res = await fetch(url, {
+      res = await fetch(url, {
+        method,
         signal: AbortSignal.timeout(this.config.timeoutMs),
-        headers: { 'Accept': 'application/json', ...init?.headers },
-        ...init,
+        headers: {
+          Accept: 'application/json',
+          ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        },
+        body: body !== undefined ? JSON.stringify(body) : undefined,
       })
-      if (!res.ok) {
-        const body = await res.text().catch(() => '')
-        throw mapHttpError(res.status, path, body)
-      }
-      return (await res.json()) as R
     } catch (e) {
-      if (e instanceof FlashApiError) throw e
       throw new FlashApiConnectionError(path, e instanceof Error ? e : new Error(String(e)))
     }
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => '')
+      throw mapHttpError(res.status, path, text)
+    }
+
+    const json = (await res.json().catch(() => ({}))) as R
+    // Trading + preview endpoints report failure as `err` inside a 200 body.
+    return assertNoErr(path, json as R & { err?: string | null })
   }
 
   private get<R>(path: string): Promise<R> {
-    return this.request(path)
+    return this.request<R>('GET', path)
   }
 
   private post<R>(path: string, body: unknown): Promise<R> {
-    return this.request(path, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
+    return this.request<R>('POST', path, body)
   }
 
-  // ── Health ──
+  // ── Reads ──────────────────────────────────────────────────────────────────
 
-  async getHealth(): Promise<T.HealthResponse> {
+  /** Service health + live pool-config provenance (env/version/account counts). */
+  getHealth(): Promise<T.HealthResponse> {
     return this.get('/health')
   }
 
-  // ── Markets ──
-
-  async getMarkets(): Promise<unknown[]> {
-    return this.get('/markets')
+  /** Token metadata for the active pool — symbols, MINTS (for deposits), decimals, isToken2022. */
+  getTokens(): Promise<T.TokenInfo[]> {
+    return this.get('/tokens')
   }
 
-  async getMarket(pubkey: string): Promise<unknown> {
-    return this.get(`/markets/${encodeURIComponent(pubkey)}`)
-  }
-
-  // ── Pools ──
-
-  async getPools(): Promise<unknown[]> {
-    return this.get('/pools')
-  }
-
-  async getPool(pubkey: string): Promise<unknown> {
-    return this.get(`/pools/${encodeURIComponent(pubkey)}`)
-  }
-
-  // ── Custodies ──
-
-  async getCustodies(): Promise<unknown[]> {
-    return this.get('/custodies')
-  }
-
-  async getCustody(pubkey: string): Promise<unknown> {
-    return this.get(`/custodies/${encodeURIComponent(pubkey)}`)
-  }
-
-  // ── Prices ──
-
-  async getPrices(): Promise<Record<string, T.PriceData>> {
+  /** All live oracle prices for the active pool, keyed by symbol. */
+  getPrices(): Promise<Record<string, T.PriceInfo>> {
     return this.get('/prices')
   }
 
-  async getPrice(symbol: string): Promise<T.PriceData> {
+  /** One symbol's live price (case-insensitive). 404 if not in the active pool. */
+  getPrice(symbol: string): Promise<T.PriceInfo> {
     return this.get(`/prices/${encodeURIComponent(symbol)}`)
   }
 
-  // ── Positions ──
-
-  async getPositions(owner?: string): Promise<unknown[]> {
-    const query = owner ? `?owner=${encodeURIComponent(owner)}` : ''
-    return this.get(`/positions${query}`)
-  }
-
-  async getPosition(pubkey: string): Promise<unknown> {
-    return this.get(`/positions/${encodeURIComponent(pubkey)}`)
-  }
-
-  async getOwnerPositions(owner: string, includePnlInLeverage = false): Promise<T.EnrichedPosition[]> {
-    return this.get(`/positions/owner/${encodeURIComponent(owner)}?includePnlInLeverageDisplay=${includePnlInLeverage}`)
-  }
-
-  // ── Orders ──
-
-  async getOrders(owner?: string): Promise<unknown[]> {
-    const query = owner ? `?owner=${encodeURIComponent(owner)}` : ''
-    return this.get(`/orders${query}`)
-  }
-
-  async getOrder(pubkey: string): Promise<unknown> {
-    return this.get(`/orders/${encodeURIComponent(pubkey)}`)
-  }
-
-  async getOwnerOrders(owner: string): Promise<T.EnrichedOrder[]> {
-    return this.get(`/orders/owner/${encodeURIComponent(owner)}`)
-  }
-
-  // ── Pool Data ──
-
-  async getPoolData(): Promise<unknown[]> {
+  /** Aggregated pool stats (TVL, utilization, LP price). */
+  getPoolData(): Promise<unknown> {
     return this.get('/pool-data')
   }
 
-  async getPoolSnapshot(poolPubkey: string): Promise<unknown> {
+  /** Pool stats for one pool pubkey. */
+  getPoolDataByPool(poolPubkey: string): Promise<unknown> {
     return this.get(`/pool-data/${encodeURIComponent(poolPubkey)}`)
   }
 
-  // ── Transaction Builder ──
+  /** Raw Anchor-decoded accounts. */
+  getMarkets(): Promise<T.RawAccount[]> {
+    return this.get('/raw/markets')
+  }
+  getMarket(pubkey: string): Promise<T.RawAccount> {
+    return this.get(`/raw/markets/${encodeURIComponent(pubkey)}`)
+  }
+  getPools(): Promise<T.RawAccount[]> {
+    return this.get('/raw/pools')
+  }
+  getPool(pubkey: string): Promise<T.RawAccount> {
+    return this.get(`/raw/pools/${encodeURIComponent(pubkey)}`)
+  }
+  getCustodies(): Promise<T.RawAccount[]> {
+    return this.get('/raw/custodies')
+  }
+  getCustody(pubkey: string): Promise<T.RawAccount> {
+    return this.get(`/raw/custodies/${encodeURIComponent(pubkey)}`)
+  }
+  /** NOTE: takes the BASKET PDA (from getOwner().basketPubkey), not the owner. */
+  getBasket(basketPubkey: string): Promise<T.RawAccount> {
+    return this.get(`/raw/baskets/${encodeURIComponent(basketPubkey)}`)
+  }
 
-  async openPosition(req: T.OpenPositionRequest): Promise<T.OpenPositionResponse> {
+  /**
+   * THE read model: everything about one owner in one call — basket PDA, raw
+   * basket bytes, and pre-enriched position/order metrics (keyed by market pubkey).
+   * `basketPubkey == null` means the account is not set up yet.
+   */
+  getOwner(owner: string): Promise<T.BasketSnapshot> {
+    return this.get(`/owner/${encodeURIComponent(owner)}`)
+  }
+
+  // ── Account setup (build unsigned tx → submit to BASE chain) ─────────────────
+
+  initBasket(req: T.InitBasketRequest): Promise<T.TxOnlyResponse> {
+    return this.post('/transaction-builder/init-basket', req)
+  }
+  initDepositLedger(req: T.InitDepositLedgerRequest): Promise<T.TxOnlyResponse> {
+    return this.post('/transaction-builder/init-deposit-ledger', req)
+  }
+  delegateBasket(req: T.DelegateBasketRequest): Promise<T.TxOnlyResponse> {
+    return this.post('/transaction-builder/delegate-basket', req)
+  }
+  depositDirect(req: T.DepositDirectRequest): Promise<T.TxOnlyResponse> {
+    return this.post('/transaction-builder/deposit-direct', req)
+  }
+
+  // ── Trading (build unsigned tx → submit to the ER) ──────────────────────────
+
+  openPosition(req: T.OpenPositionRequest): Promise<T.OpenPositionResponse> {
     return this.post('/transaction-builder/open-position', req)
   }
-
-  async closePosition(req: T.ClosePositionRequest): Promise<T.ClosePositionResponse> {
+  closePosition(req: T.ClosePositionRequest): Promise<T.ClosePositionResponse> {
     return this.post('/transaction-builder/close-position', req)
   }
-
-  async addCollateral(req: T.AddCollateralRequest): Promise<T.AddCollateralResponse> {
-    return this.post('/transaction-builder/add-collateral', req)
-  }
-
-  async removeCollateral(req: T.RemoveCollateralRequest): Promise<T.RemoveCollateralResponse> {
-    return this.post('/transaction-builder/remove-collateral', req)
-  }
-
-  async reversePosition(req: T.ReversePositionRequest): Promise<T.ReversePositionResponse> {
+  reversePosition(req: T.ReversePositionRequest): Promise<T.ReversePositionResponse> {
     return this.post('/transaction-builder/reverse-position', req)
   }
-
-  async placeTriggerOrder(req: T.PlaceTriggerOrderRequest): Promise<T.PlaceTriggerOrderResponse> {
+  addCollateral(req: T.AddCollateralRequest): Promise<T.AddCollateralResponse> {
+    return this.post('/transaction-builder/add-collateral', req)
+  }
+  removeCollateral(req: T.RemoveCollateralRequest): Promise<T.RemoveCollateralResponse> {
+    return this.post('/transaction-builder/remove-collateral', req)
+  }
+  placeTpSl(req: T.PlaceTpSlRequest): Promise<T.TxOnlyResponse> {
+    return this.post('/transaction-builder/place-tp-sl', req)
+  }
+  placeTriggerOrder(req: T.PlaceTriggerOrderRequest): Promise<T.TxOnlyResponse> {
     return this.post('/transaction-builder/place-trigger-order', req)
   }
-
-  async editTriggerOrder(req: T.EditTriggerOrderRequest): Promise<T.EditTriggerOrderResponse> {
+  editTriggerOrder(req: T.EditTriggerOrderRequest): Promise<T.TxOnlyResponse> {
     return this.post('/transaction-builder/edit-trigger-order', req)
   }
-
-  async cancelTriggerOrder(req: T.CancelTriggerOrderRequest): Promise<T.CancelTriggerOrderResponse> {
+  cancelTriggerOrder(req: T.CancelTriggerOrderRequest): Promise<T.TxOnlyResponse> {
     return this.post('/transaction-builder/cancel-trigger-order', req)
   }
-
-  async cancelAllTriggerOrders(req: T.CancelAllTriggerOrdersRequest): Promise<T.CancelAllTriggerOrdersResponse> {
+  cancelAllTriggerOrders(req: T.CancelAllTriggerOrdersRequest): Promise<T.TxOnlyResponse> {
     return this.post('/transaction-builder/cancel-all-trigger-orders', req)
   }
+  editLimitOrder(req: T.EditLimitOrderRequest): Promise<T.TxOnlyResponse> {
+    return this.post('/transaction-builder/edit-limit-order', req)
+  }
+  cancelLimitOrder(req: T.CancelLimitOrderRequest): Promise<T.TxOnlyResponse> {
+    return this.post('/transaction-builder/cancel-limit-order', req)
+  }
 
-  // ── Previews ──
+  // ── Withdrawal (build unsigned tx → submit to BASE chain) ────────────────────
 
-  async previewLimitOrderFees(req: T.PreviewLimitOrderFeesRequest): Promise<T.PreviewLimitOrderFeesResponse> {
+  requestWithdrawal(req: T.RequestWithdrawalRequest): Promise<T.TxOnlyResponse> {
+    return this.post('/transaction-builder/request-withdrawal', req)
+  }
+  executeWithdrawal(req: T.ExecuteWithdrawalRequest): Promise<T.TxOnlyResponse> {
+    return this.post('/transaction-builder/execute-withdrawal', req)
+  }
+
+  // ── Previews (read-only math; no tx) ────────────────────────────────────────
+
+  previewLimitOrderFees(req: T.PreviewLimitOrderFeesRequest): Promise<T.PreviewLimitOrderFeesResponse> {
     return this.post('/preview/limit-order-fees', req)
   }
-
-  async previewExitFee(req: T.PreviewExitFeeRequest): Promise<T.PreviewExitFeeResponse> {
+  previewExitFee(req: T.PreviewExitFeeRequest): Promise<T.PreviewExitFeeResponse> {
     return this.post('/preview/exit-fee', req)
   }
-
-  async previewTpSl(req: T.PreviewTpSlRequest): Promise<T.PreviewTpSlResponse> {
+  previewTpSl(req: T.PreviewTpSlRequest): Promise<T.PreviewTpSlResponse> {
     return this.post('/preview/tp-sl', req)
   }
-
-  async previewMargin(req: T.PreviewMarginRequest): Promise<T.PreviewMarginResponse> {
+  previewMargin(req: T.PreviewMarginRequest): Promise<T.PreviewMarginResponse> {
     return this.post('/preview/margin', req)
   }
 }
+
+export { FlashApiError, FlashApiConnectionError }

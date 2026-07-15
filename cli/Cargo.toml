@@ -13,7 +13,7 @@ path = "src/main.rs"
 # are kept ONLY for local signing + submission. The private flash-sdk git dep,
 # anchor-lang, and the account decoders are gone.
 solana-sdk = "2.2"
-solana-client = "2.2"
+solana-client = "4.0"
 clap = { version = "4", features = ["derive"] }
 tokio = { version = "1", features = ["full"] }
 serde = { version = "1", features = ["derive"] }
